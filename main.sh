@@ -197,7 +197,7 @@ main() {
     reflector --country 'VN,SG,JP,HK,TW' --protocol https --sort rate --save /etc/pacman.d/mirrorlist
     
     local -a PACKAGES_TO_INSTALL; IFS=' ' read -ra PACKAGES_TO_INSTALL <<< "$(os_get_base_packages "$FILESYSTEM" "$DOTFILES_METHOD")"
-    if [ command -v basestrap &>/dev/null ]; then
+    if command -v basestrap &>/dev/null; then
         basestrap /mnt "${PACKAGES_TO_INSTALL[@]}"
     else
         pacstrap /mnt "${PACKAGES_TO_INSTALL[@]}"
