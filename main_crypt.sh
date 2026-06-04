@@ -242,7 +242,7 @@ pacman -Syu --noconfirm
 sed -i "s/^HOOKS=.*/HOOKS=(${HOOKS_LINE})/" /etc/mkinitcpio.conf; mkinitcpio -P
 
 # Cấu hình GRUB
-sed -i "s/GRUB_CMDLINE_LINUX=\"\"/GRUB_CMDLINE_LINUX=\"${KERNEL_CMDLINE}\"/" /etc/default/grub
+sed -i "s|GRUB_CMDLINE_LINUX=\"\"|GRUB_CMDLINE_LINUX=\"${KERNEL_CMDLINE}\"|" /etc/default/grub
 
 grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB --recheck
 grub-mkconfig -o /boot/grub/grub.cfg
