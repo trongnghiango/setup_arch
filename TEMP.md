@@ -27,6 +27,10 @@ virt-install --connect qemu:///system \
   --check path_in_use=off,disk_size=off
 ```
 
+### note
+```
+sudo pacman -Sy --noconfirm parted gptfdisk lvm2
+```
 ### Giải thích các tham số chính:
 *   `--name artix`: Đặt tên cho máy ảo là `artix`.
 *   `--memory 6144`: Cấp phát 6GB RAM (6144 MB).
