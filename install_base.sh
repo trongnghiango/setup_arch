@@ -39,10 +39,11 @@ FILESYSTEM="ext4"
 DOTFILES_METHOD="stow"
 
 # CHÚ Ý: BẠN HÃY THAY CÁC URL NÀY BẰNG REPO CỦA BẠN
-DOTFILES_RSYNC_REPO="https://github.com/username/dotfiles.git"
-DOTFILES_STOW_REPO="https://github.com/username/dotfiles.git"
+DOTFILES_RSYNC_REPO="https://github.com/trongnghiango/voidrice.git"
+DOTFILES_STOW_REPO="https://github.com/trongnghiango/dotfiles-stow.git"
 DOTFILES_REPO=""
-PROGS_LIST_URL="https://raw.githubusercontent.com/username/repo/main/progs.csv"
+PROGS_LIST_URL="https://raw.githubusercontent.com/trongnghiango/setup_arch/refs/heads/main/progs.csv"
+
 
 TIME_ZONE="Asia/Ho_Chi_Minh"
 LOCALE="en_US.UTF-8"
