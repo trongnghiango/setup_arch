@@ -258,15 +258,15 @@ useradd -m -U -G wheel -s /bin/zsh "${USER_NAME}";
 echo "${USER_NAME}:${PASSWORD}" | chpasswd; echo "root:${PASSWORD}" | chpasswd
 echo '%wheel ALL=(ALL:ALL) NOPASSWD: ALL' > /etc/sudoers.d/99_install_privileges
 
-# Kích hoạt NetworkManager tương ứng với Init System
-case "$INIT_SYSTEM" in
-    openrc) rc-update add networkmanager default; rc-update add dbus default ;;
-    runit)  ln -sf /etc/runit/sv/networkmanager /etc/runit/runsvdir/default/
-            ln -sf /etc/runit/sv/dbus /etc/runit/runsvdir/default/ ;;
-    s6)     s6-service enable default networkmanager
-            s6-service enable default dbus ;;
-    *)      systemctl enable NetworkManager ;;
-esac
+    # Kích hoạt NetworkManager tương ứng với Init System
+    case "$INIT_SYSTEM" in
+        openrc) rc-update add NetworkManager default; rc-update add dbus default ;;
+        runit)  ln -sf /etc/runit/sv/NetworkManager /etc/runit/runsvdir/default/
+                ln -sf /etc/runit/sv/dbus /etc/runit/runsvdir/default/ ;;
+        s6)     s6-service enable default NetworkManager
+                s6-service enable default dbus ;;
+        *)      systemctl enable NetworkManager ;;
+    esac
 
 ln -sfT /bin/dash /bin/sh
 CHROOT_SCRIPT
