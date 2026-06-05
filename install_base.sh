@@ -264,17 +264,10 @@ mount /dev/vg0/root /mnt
 mkdir -p /mnt/boot
 mount "${PART_BOOT}" /mnt/boot
 
-# Tối ưu hóa mirror
+# Cập nhật cơ sở dữ liệu pacman (mirrorlist đã được tối ưu riêng)
 pgp_fix_before_pacstrap
-log_info "Tối ưu hóa mirror..."
-if [ -f /etc/artix-release ]; then
-    curl -s "https://raw.githubusercontent.com/artix-linux/artix-mirrorlist/master/mirrorlist" -o /etc/pacman.d/mirrorlist 2>/dev/null || true
-else
-    # Dùng API mirrorstatus của Arch: trả về danh sách mirror đã được sắp xếp
-    # theo độ mới, không giới hạn quốc gia để có mirror ổn định và nhanh nhất
-    curl -s "https://archlinux.org/mirrorlist/?protocol=https&use_mirror_status=on" \
-        | sed 's/^#Server/Server/' > /etc/pacman.d/mirrorlist 2>/dev/null || true
-fi
+log_info "Sử dụng mirrorlist hiện tại..."
+pacman -Syy --noconfirm
 
 PACKAGES_TO_INSTALL=($(os_get_base_packages "$FILESYSTEM" "$DOTFILES_METHOD"))
 log_info "Bắt đầu cài đặt các gói CLI cơ bản vào /mnt..."

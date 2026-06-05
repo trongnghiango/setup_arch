@@ -18,9 +18,10 @@ usage() {
     echo "Hệ thống cài đặt tối ưu cho Arch/Artix Linux."
     echo
     echo "Modes (Chọn một):"
-    echo "  --base       Cài đặt hệ điều hành tối giản (Giai đoạn 1)"
-    echo "  --apps       Cài đặt gói ứng dụng và biên dịch dwm (Giai đoạn 2 - chạy trên OS mới)"
-    echo "  --dotfiles   Thiết lập cấu hình dotfiles (Giai đoạn 3)"
+    echo "  --mirrors    Tối ưu hóa gương tải gói (optimize_mirrors.sh)"
+    echo "  --base       Cài đặt hệ điều hành tối giản (install_base.sh)"
+    echo "  --apps       Cài đặt gói ứng dụng và biên dịch dwm (install_apps.sh)"
+    echo "  --dotfiles   Thiết lập cấu hình dotfiles (install_dotfiles.sh)"
     echo "  --all        Chạy Combo từ đầu đến cuối ngay trong Live USB (Một lệnh ăn ngay)"
     echo
     echo "Xem trợ giúp chi tiết của từng giai đoạn bằng cách gọi script con tương ứng."
@@ -38,6 +39,9 @@ MODE="$1"
 shift
 
 case "$MODE" in
+    --mirrors)
+        exec "$SCRIPT_DIR/optimize_mirrors.sh" "$@"
+        ;;
     --base)
         exec "$SCRIPT_DIR/install_base.sh" "$@"
         ;;
@@ -54,7 +58,9 @@ case "$MODE" in
         log_info "Toàn bộ quá trình cài đặt sẽ được ghi vào file log: ${LOG_FILE}"
         
         {
-            # Lấy tham số và truyền cho install_base.sh
+            step "BƯỚC 0: Tối ưu hóa mirror..."
+            "$SCRIPT_DIR/optimize_mirrors.sh"
+
             step "BƯỚC 1: Cài đặt hệ thống cơ bản..."
             "$SCRIPT_DIR/install_base.sh" "$@"
 
