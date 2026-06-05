@@ -92,23 +92,19 @@ sudo -u "${USER_NAME}" /bin/bash -c '
     PROGS_FILE="'${PROGS_FILE}'"
     SKIP_BUILD="'${SKIP_BUILD}'"
 
-    # Định nghĩa hàm log bên trong bash phụ
     log_user() { echo -e "  \e[1;34m[USER]\e[0m $*"; }
     log_err_u() { echo -e "  \e[1;31m[FAIL]\e[0m $*"; }
-
-    git config --global http.version HTTP/1.1
-    git config --global http.postBuffer 524288000
-    git config --global http.sslVerify false
 
     # Cài đặt thủ công từ AUR Snapshot (dự phòng)
     install_manual() {
         pkg="$1"
-        log_user "Dùng phương pháp tải Snapshot cho: $pkg..."
+        log_user "Tải Snapshot cho: $pkg..."
         cd "$SRC_DIR"
         rm -rf "$pkg" "$pkg.tar.gz"
-        curl -L -k -O "https://aur.archlinux.org/cgit/aur.git/snapshot/$pkg.tar.gz" || return 1
-        if [ -f "$pkg.tar.gz" ]; then
-            tar -xvf "$pkg.tar.gz" > /dev/null
+        # Sửa lại URL AUR chuẩn
+        curl -L -k -O "https://aur.archlinux.org/cgit/aur.git/snapshot/${pkg}.tar.gz"
+        if [ -f "${pkg}.tar.gz" ]; then
+            tar -xvf "${pkg}.tar.gz" > /dev/null
             cd "$pkg"
             makepkg -si --noconfirm --needed --nocheck --skippgpcheck
         else
@@ -119,7 +115,7 @@ sudo -u "${USER_NAME}" /bin/bash -c '
     # Cài yay-bin (AUR helper)
     if ! command -v yay &> /dev/null; then
         log_user "Cài đặt yay-bin..."
-        install_manual "yay-bin" || log_err_u "Không cài được yay-bin."
+        install_manual "yay-bin" || log_err_u "Không cài được yay-bin. Vui lòng kiểm tra mạng."
     fi
 
     # Cài gói AUR (tag "A")

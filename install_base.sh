@@ -3,30 +3,33 @@ set -euo pipefail
 IFS=$'\n\t'
 
 #==============================================================================
+# KIỂM TRA UEFI (BẮT BUỘC)
+#==============================================================================
+if [ ! -d "/sys/firmware/efi" ]; then
+    echo -e "\e[1;31m[ERROR]\e[0m Hệ thống đang khởi động ở chế độ BIOS/Legacy."
+    echo -e "Script này sử dụng ổ đĩa GPT và GRUB EFI, CHỈ HỖ TRỢ UEFI."
+    echo -e "Vui lòng khởi động lại máy, truy cập BIOS và chọn boot USB ở chế độ UEFI."
+    exit 1
+fi
+
+#==============================================================================
 # HÀM TIỆN ÍCH
 #==============================================================================
 SCRIPT_TIME="$(date +%Y%m%d_%H%M%S)"
 SCRIPT_LOG="/tmp/setup_base_${SCRIPT_TIME}.log"
-
 log_info() { echo -e "$(date '+%H:%M:%S') \e[1;32m[INFO]\e[0m  $*"; }
 log_warn() { echo -e "$(date '+%H:%M:%S') \e[1;33m[WARN]\e[0m  $*"; }
 log_error() {
     echo -e "$(date '+%H:%M:%S') \e[1;31m[ERROR]\e[0m $*" >&2
-    echo -e "\n========================================"
-    echo "File log: ${SCRIPT_LOG}"
-    echo "========================================"
     exit 1
 }
 step() { echo -e "\n$(date '+%H:%M:%S') \e[1;34m>>> $*\e[0m"; }
 
-# Xác định thư mục chứa script
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
-
-# Đảm bảo toàn bộ output được ghi log ngay từ đầu
 exec > >(tee -ai "${SCRIPT_LOG}") 2>&1
 
 #==============================================================================
-# KHỞI TẠO BIẾN CẤU HÌNH VÀ HÀM BỔ TRỢ
+# KHỞI TẠO BIẾN CẤU HÌNH (Đã điền sẵn các URL mẫu để tránh lỗi)
 #==============================================================================
 ENCRYPTION=false
 USER_NAME="ka"
@@ -34,10 +37,13 @@ DISK="vda"
 HOSTNAME="archlinux"
 FILESYSTEM="ext4"
 DOTFILES_METHOD="stow"
-DOTFILES_RSYNC_REPO="https://github.com/trongnghiango/voidrice.git"
-DOTFILES_STOW_REPO="https://github.com/trongnghiango/dotfiles-stow.git"
+
+# CHÚ Ý: BẠN HÃY THAY CÁC URL NÀY BẰNG REPO CỦA BẠN
+DOTFILES_RSYNC_REPO="https://github.com/username/dotfiles.git"
+DOTFILES_STOW_REPO="https://github.com/username/dotfiles.git"
 DOTFILES_REPO=""
-PROGS_LIST_URL="https://raw.githubusercontent.com/trongnghiango/setup_arch/refs/heads/main/progs.csv"
+PROGS_LIST_URL="https://raw.githubusercontent.com/username/repo/main/progs.csv"
+
 TIME_ZONE="Asia/Ho_Chi_Minh"
 LOCALE="en_US.UTF-8"
 PASSWORD=""
@@ -236,13 +242,24 @@ echo "  - Dotfiles repo:  ${DOTFILES_REPO}"
 echo "  - Init system:    ${INIT_SYSTEM}"
 echo "-------------------------------------------------"
 
+# TÌM XUỐNG ĐOẠN XỬ LÝ NHẬP MẬT KHẨU (Sửa lại để an toàn hơn)
 if [ -z "${PASSWORD}" ]; then
-    read -sp "Nhập mật khẩu cho user '${USER_NAME}', 'root' và MÃ HÓA LUKS: " PASSWORD; echo; echo
-    if [ -z "${PASSWORD}" ]; then log_error "Mật khẩu không được để trống."; fi
+    # Yêu cầu nhập 2 lần để tránh gõ sai
+    while true; do
+        read -sp "Nhập mật khẩu cho user '${USER_NAME}', 'root' và LUKS: " PASS1; echo
+        read -sp "Nhập lại mật khẩu để xác nhận: " PASS2; echo
+        if [ "$PASS1" = "$PASS2" ] && [ -n "$PASS1" ]; then
+            PASSWORD="$PASS1"
+            break
+        else
+            log_warn "Mật khẩu không khớp hoặc bị trống. Vui lòng nhập lại."
+        fi
+    done
 fi
 
-read -rp "CẢNH BÁO: Dữ liệu trên /dev/${DISK} sẽ bị xóa. Tiếp tục? [y/N]: " confirm
+read -rp "CẢNH BÁO: Dữ liệu trên /dev/${DISK} sẽ bị XÓA SẠCH. Tiếp tục? [y/N]: " confirm
 if [[ ! "$confirm" =~ ^[Yy]$ ]]; then log_info "Đã hủy."; exit 0; fi
+
 
 # Thực hiện phân vùng
 DEVICE="/dev/${DISK}"
