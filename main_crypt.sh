@@ -54,12 +54,15 @@ main() {
 
     disk_prepare() {
         local device="$1"
-        wipefs -a "$device" &>/dev/null || true; sgdisk --zap-all "$device" &>/dev/null
-        parted -s "$device" mklabel gpt
-        parted -s "$device" mkpart p fat32 1MiB 513MiB; parted -s "$device" set 1 esp on
-        parted -s "$device" mkpart p ext4 513MiB 100%; parted -s "$device" set 2 lvm on
+        wipefs -af "$device" &>/dev/null || true
+        sgdisk --zap-all "$device" &>/dev/null
+        sleep 1
+        sgdisk -og "$device" &>/dev/null
+        sgdisk -n 1:1M:513M -t 1:ef00 "$device" &>/dev/null
+        sgdisk -n 2:513M:0 -t 2:8e00 "$device" &>/dev/null
         PART_BOOT="${device}1"; PART_LVM="${device}2"
-        partprobe "$device" || true; sleep 2
+        blockdev --rereadpt "$device" &>/dev/null || true
+        sleep 2; partprobe "$device" || udevadm settle 2>/dev/null || true
     }
 
     disk_encrypt_setup() {
