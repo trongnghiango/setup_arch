@@ -54,15 +54,20 @@ main() {
 
     disk_prepare() {
         local device="$1"
-        wipefs -af "$device" &>/dev/null || true
-        sgdisk --zap-all "$device" &>/dev/null
+        log_info "Đang dọn dẹp signature cũ trên $device..."
+        wipefs -af "$device" || true
+        log_info "Xóa bảng phân vùng cũ..."
+        sgdisk --zap-all "$device"
         sleep 1
-        sgdisk -og "$device" &>/dev/null
-        sgdisk -n 1:1M:513M -t 1:ef00 "$device" &>/dev/null
-        sgdisk -n 2:513M:0 -t 2:8e00 "$device" &>/dev/null
+        log_info "Tạo bảng phân vùng mới..."
+        sgdisk -og "$device"
+        sgdisk -n 1:1M:513M -t 1:ef00 "$device"
+        sgdisk -n 2:513M:0 -t 2:8e00 "$device"
         PART_BOOT="${device}1"; PART_LVM="${device}2"
-        blockdev --rereadpt "$device" &>/dev/null || true
-        sleep 2; partprobe "$device" || udevadm settle 2>/dev/null || true
+        log_info "Đồng bộ kernel..."
+        blockdev --rereadpt "$device" || true
+        sleep 2
+        partprobe "$device" || udevadm settle || true
     }
 
     disk_encrypt_setup() {
