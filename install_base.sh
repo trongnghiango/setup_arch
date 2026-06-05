@@ -400,9 +400,15 @@ fi
 rm /mnt/root/chroot_config.sh
 
 # Lưu lại các file script cài đặt sang hệ thống mới để chạy offline/post-install dễ dàng
-mkdir -p /mnt/home/${USER_NAME}/setup_arch
-cp -r "${SCRIPT_DIR}"/* /mnt/home/${USER_NAME}/setup_arch/
-chown -R ${USER_NAME}:${USER_NAME} /mnt/home/${USER_NAME}/setup_arch/
+mkdir -p "/mnt/home/${USER_NAME}/setup_arch"
+cp -r "${SCRIPT_DIR}"/* "/mnt/home/${USER_NAME}/setup_arch/"
+
+# Dùng chroot để đổi quyền vì user chỉ tồn tại bên trong /mnt
+if command -v artix-chroot &>/dev/null; then
+    artix-chroot /mnt chown -R "${USER_NAME}:${USER_NAME}" "/home/${USER_NAME}/setup_arch/"
+else
+    arch-chroot /mnt chown -R "${USER_NAME}:${USER_NAME}" "/home/${USER_NAME}/setup_arch/"
+fi
 
 # Sao chép log setup_base vào phân vùng mới
 cp "${SCRIPT_LOG}" /mnt/var/log/setup_base.log 2>/dev/null || true
