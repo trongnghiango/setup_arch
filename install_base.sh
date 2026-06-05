@@ -146,9 +146,14 @@ bootloader_get_kernel_cmdline() {
 
 os_get_base_packages() {
     local fs="$1" method="$2"
+    local kernel="linux-lts"
+    # Artix Linux mặc định không có linux-lts trong repo system/world
+    if [ -f /etc/artix-release ] || command -v basestrap >/dev/null 2>&1; then
+        kernel="linux"
+    fi
     # Thêm sẵn các thư viện phát triển X11 và XCB phục vụ biên dịch các gói suckless
     local -a pkgs=(
-        base base-devel linux-lts linux-firmware rsync xorg-xinit lvm2 grub efibootmgr sudo git curl neovim zsh dash libnewt
+        base base-devel "$kernel" linux-firmware rsync xorg-xinit lvm2 grub efibootmgr sudo git curl neovim zsh dash libnewt
         libxcb xcb-util xcb-util-image xcb-util-keysyms xcb-util-wm
     )
     [ "$ENCRYPTION" = true ] && pkgs+=(cryptsetup)
@@ -272,6 +277,7 @@ pacman -Syy --noconfirm
 PACKAGES_TO_INSTALL=($(os_get_base_packages "$FILESYSTEM" "$DOTFILES_METHOD"))
 log_info "Bắt đầu cài đặt các gói CLI cơ bản vào /mnt..."
 if command -v basestrap &>/dev/null; then
+    # Artix yêu cầu basestrap thay vì pacstrap
     basestrap /mnt "${PACKAGES_TO_INSTALL[@]}"
 else
     pacstrap /mnt "${PACKAGES_TO_INSTALL[@]}"
