@@ -3,7 +3,8 @@ set -euo pipefail
 IFS=$'\n\t'
 
 #==============================================================================
-# SCRIPT TỐI ƯU HÓA MIRRORS CHO ARCH/ARTIX LINUX
+# Tối ưu hóa mirrors dựa trên file mirrorlist có sẵn của Live ISO
+# Không phụ thuộc vào bất kỳ nguồn ngoài nào, không tải gì từ mạng
 #==============================================================================
 SCRIPT_TIME="$(date +%Y%m%d_%H%M%S)"
 SCRIPT_LOG="/tmp/optimize_mirrors_${SCRIPT_TIME}.log"
@@ -12,55 +13,82 @@ log_info() { echo -e "$(date '+%H:%M:%S') \e[1;32m[INFO]\e[0m  $*"; }
 log_warn() { echo -e "$(date '+%H:%M:%S') \e[1;33m[WARN]\e[0m  $*"; }
 log_error() {
     echo -e "$(date '+%H:%M:%S') \e[1;31m[ERROR]\e[0m $*" >&2
-    echo -e "\n========================================"
-    echo "File log: ${SCRIPT_LOG}"
-    echo "========================================"
+    echo -e "\nFile log: ${SCRIPT_LOG}"
     exit 1
 }
 
-# Đảm bảo ghi log
 exec > >(tee -ai "${SCRIPT_LOG}") 2>&1
 
-# Kiểm tra quyền root
 if [ "$EUID" -ne 0 ]; then
     log_error "Vui lòng chạy script này với quyền root (sudo)."
 fi
 
-# Sao lưu mirrorlist gốc
-cp /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.bak || true
+MIRRORLIST="/etc/pacman.d/mirrorlist"
 
-log_info "Bắt đầu tối ưu hóa danh sách mirror..."
-
-log_info "Đang tải rate-mirrors từ GitHub (Statically compiled Rust binary)..."
-if curl -sL "https://github.com/aenmd/rate-mirrors/releases/latest/download/rate-mirrors-linux-amd64.tar.gz" | tar -xz -C /tmp 2>/dev/null; then
-    chmod +x /tmp/rate-mirrors
-    
-    log_info "Đang đánh giá chất lượng và kiểm tra tốc độ thực tế của các mirrors..."
-    if [ -f /etc/artix-release ]; then
-        log_info "Đang quét các mirror cho Artix Linux..."
-        if ! /tmp/rate-mirrors --concurrency 50 artix > /etc/pacman.d/mirrorlist; then
-            log_warn "rate-mirrors chạy lỗi, khôi phục lại mirrorlist gốc."
-            mv /etc/pacman.d/mirrorlist.bak /etc/pacman.d/mirrorlist
-        fi
-    else
-        log_info "Đang quét các mirror cho Arch Linux..."
-        if ! /tmp/rate-mirrors --concurrency 50 arch > /etc/pacman.d/mirrorlist; then
-            log_warn "rate-mirrors chạy lỗi, khôi phục lại mirrorlist gốc."
-            mv /etc/pacman.d/mirrorlist.bak /etc/pacman.d/mirrorlist
-        fi
-    fi
-    
-    rm -f /tmp/rate-mirrors
-    log_info "Tối ưu hóa mirror hoàn tất!"
-else
-    log_warn "Không thể tải rate-mirrors. Đã khôi phục và giữ nguyên mirrorlist gốc của ISO."
-    mv /etc/pacman.d/mirrorlist.bak /etc/pacman.d/mirrorlist
+if [ ! -f "$MIRRORLIST" ]; then
+    log_error "Không tìm thấy file mirrorlist tại $MIRRORLIST"
 fi
 
-# Chạy cập nhật database thử nghiệm
-log_info "Đang thử nghiệm đồng bộ cơ sở dữ liệu Pacman..."
+log_info "Sao lưu mirrorlist gốc..."
+cp "$MIRRORLIST" "${MIRRORLIST}.bak"
+
+log_info "Bỏ comment các dòng Server trong mirrorlist..."
+sed -i 's/^#Server/Server/' "$MIRRORLIST"
+
+log_info "Kiểm tra danh sách server có sẵn..."
+SERVER_COUNT=$(grep -c "^Server" "$MIRRORLIST" 2>/dev/null || echo 0)
+if [ "$SERVER_COUNT" -eq 0 ]; then
+    log_error "Không tìm thấy dòng Server nào trong mirrorlist. File mirrorlist có thể bị hỏng."
+fi
+log_info "Tìm thấy $SERVER_COUNT server trong mirrorlist."
+
+log_info "Đo tốc độ kết nối đến các server..."
+REPO="core"
+ARCH=$(uname -m)
+RESULTS=$(mktemp)
+PID_LIST=""
+
+idx=0
+while IFS= read -r line; do
+    url=$(echo "$line" | sed "s/\$repo/$REPO/g; s/\$arch/$ARCH/g")
+    idx=$((idx + 1))
+    (
+        latency=$(curl -o /dev/null -s -k -w "%{time_connect}" --connect-timeout 2 "$url" 2>/dev/null || echo "999")
+        echo "$latency $line" >> "$RESULTS"
+    ) &
+    PID_LIST="$PID_LIST $!"
+    if [ $((idx % 20)) -eq 0 ]; then
+        wait $PID_LIST 2>/dev/null || true
+        PID_LIST=""
+    fi
+done < <(grep "^Server" "$MIRRORLIST")
+wait $PID_LIST 2>/dev/null || true
+
+FASTEST=$(mktemp)
+sort -n "$RESULTS" | head -20 > "$FASTEST"
+
+log_info "Top 20 server nhanh nhất (dưới 1 giây):"
+while IFS=' ' read -r latency url; do
+    if [ "$(echo "$latency < 1" | bc -l 2>/dev/null)" = "1" ]; then
+        printf "  ✅ %4.0fms  %s\n" "$(echo "$latency * 1000" | bc)" "$url"
+    elif [ "$latency" = "999" ]; then
+        :
+    else
+        printf "  ⚠️ %4.0fms  %s\n" "$(echo "$latency * 1000 | bc" 2>/dev/null || echo "?")" "$url"
+    fi
+done < "$FASTEST"
+
+log_info "Cập nhật mirrorlist với các server nhanh nhất..."
+grep -v "^Server" "$MIRRORLIST" > "${MIRRORLIST}.tmp"
+while IFS=' ' read -r latency line; do
+    echo "$line" >> "${MIRRORLIST}.tmp"
+done < "$FASTEST"
+mv "${MIRRORLIST}.tmp" "$MIRRORLIST"
+rm -f "$RESULTS" "$FASTEST" "${MIRRORLIST}.bak"
+
+log_info "Kiểm tra đồng bộ Pacman..."
 if pacman -Syy; then
-    log_info "Đồng bộ pacman thành công! Tốc độ mirror đã được tối ưu."
+    log_info "Đồng bộ Pacman thành công! Hệ thống đã sẵn sàng."
 else
-    log_error "Đồng bộ pacman thất bại với mirrorlist mới. Vui lòng kiểm tra lại kết nối mạng."
+    log_error "Đồng bộ Pacman thất bại. Kiểm tra lại kết nối mạng hoặc chạy lại optimize_mirrors.sh."
 fi

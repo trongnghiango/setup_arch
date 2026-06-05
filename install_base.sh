@@ -276,12 +276,19 @@ pacman -Syy --noconfirm
 
 PACKAGES_TO_INSTALL=($(os_get_base_packages "$FILESYSTEM" "$DOTFILES_METHOD"))
 log_info "Bắt đầu cài đặt các gói CLI cơ bản vào /mnt..."
+
+# Xác định trình cài đặt là basestrap (Artix) hoặc pacstrap (Arch)
+INSTALLER=""
 if command -v basestrap &>/dev/null; then
-    # Artix yêu cầu basestrap thay vì pacstrap
-    basestrap /mnt "${PACKAGES_TO_INSTALL[@]}"
+    INSTALLER="basestrap"
+elif command -v pacstrap &>/dev/null; then
+    INSTALLER="pacstrap"
 else
-    pacstrap /mnt "${PACKAGES_TO_INSTALL[@]}"
+    log_error "Không tìm thấy lệnh cài đặt (basestrap/pacstrap). Hãy cài gói arch-install-scripts hoặc tương đương."
 fi
+
+# Chạy lệnh cài đặt
+$INSTALLER /mnt "${PACKAGES_TO_INSTALL[@]}"
 
 pgp_restore_after_pacstrap
 
