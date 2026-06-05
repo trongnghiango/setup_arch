@@ -54,12 +54,17 @@ main() {
 
     disk_prepare() {
         local device="$1"
+        log_info "Tắt swap, LVM, và đóng LUKS cũ nếu có..."
+        swapoff -a || true
+        vgchange -an vg0 || true
+        cryptsetup close cryptlvm || true
         log_info "Đang dọn dẹp signature cũ trên $device..."
         wipefs -af "$device" || true
         log_info "Tạo bảng phân vùng GPT mới..."
         sgdisk -og -n 1:2048:+512M -t 1:ef00 -n 2:0:0 -t 2:8e00 "$device" || log_error "sgdisk thất bại!"
         PART_BOOT="${device}1"; PART_LVM="${device}2"
         log_info "Đồng bộ kernel..."
+        udevadm settle || true
         blockdev --rereadpt "$device" || true
         sleep 2
         partprobe "$device" || udevadm settle || true
@@ -187,8 +192,8 @@ main() {
     disk_encrypt_setup "$PART_LVM" "$PASSWORD"
 
     log_info "Thiết lập LVM trên thiết bị, Định dạng, Mount..."
-    pvcreate "$PV_DEVICE"
-    vgcreate vg0 "$PV_DEVICE"
+    pvcreate -ff -y "$PV_DEVICE"
+    vgcreate -y vg0 "$PV_DEVICE"
     local RAM_SIZE_MB; RAM_SIZE_MB=$(free -m | awk '/^Mem:/{print $2}')
     lvcreate -L "${RAM_SIZE_MB}M" vg0 -n swap; lvcreate -l 100%FREE vg0 -n root
     mkfs.fat -F32 "${PART_BOOT}"; if [ "${FILESYSTEM}" = "btrfs" ]; then mkfs.btrfs -f /dev/vg0/root; else mkfs.ext4 -F /dev/vg0/root; fi
