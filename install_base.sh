@@ -292,7 +292,7 @@ pgp_fix_before_pacstrap
 log_info "Sử dụng mirrorlist hiện tại..."
 pacman -Syy --noconfirm
 
-PACKAGES_TO_INSTALL=($(os_get_base_packages "$FILESYSTEM" "$DOTFILES_METHOD"))
+PACKAGES_TO_INSTALL=$(os_get_base_packages "$FILESYSTEM" "$DOTFILES_METHOD")
 log_info "Bắt đầu cài đặt các gói CLI cơ bản vào /mnt..."
 
 # Xác định trình cài đặt là basestrap (Artix) hoặc pacstrap (Arch)
