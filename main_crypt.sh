@@ -57,9 +57,7 @@ main() {
         log_info "Đang dọn dẹp signature cũ trên $device..."
         wipefs -af "$device" || true
         log_info "Tạo bảng phân vùng GPT mới..."
-        sgdisk --zap-all "$device" >/dev/null 2>&1 || true
-        sleep 1
-        sgdisk -og -n 1:1M:513M -t 1:ef00 -n 2:513M:0 -t 2:8e00 "$device" || log_error "sgdisk thất bại!"
+        sgdisk -og -n 1:2048:+512M -t 1:ef00 -n 2:0:0 -t 2:8e00 "$device" || log_error "sgdisk thất bại!"
         PART_BOOT="${device}1"; PART_LVM="${device}2"
         log_info "Đồng bộ kernel..."
         blockdev --rereadpt "$device" || true
