@@ -119,9 +119,9 @@ main() {
         
         # Thêm service packages tương ứng với Init System
         case "$INIT_SYSTEM" in
-            openrc) pkgs+=(openrc elogind networkmanager-openrc lvm2-openrc) ;;
-            runit)  pkgs+=(runit elogind networkmanager-runit lvm2-runit) ;;
-            s6)     pkgs+=(s6 elogind networkmanager-s6 lvm2-s6) ;;
+            openrc) pkgs+=(openrc elogind-openrc networkmanager-openrc lvm2-openrc) ;;
+            runit)  pkgs+=(runit elogind-runit networkmanager-runit lvm2-runit) ;;
+            s6)     pkgs+=(s6 elogind-s6 networkmanager-s6 lvm2-s6) ;;
             *)      pkgs+=(networkmanager) ;;
         esac
         echo "${pkgs[@]}"
