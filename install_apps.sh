@@ -2,11 +2,12 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-log_info() { echo -e "\e[1;32m[INFO]\e[0m  $*"; }
-log_warn() { echo -e "\e[1;33m[WARN]\e[0m  $*"; }
-log_error() { echo -e "\e[1;31m[ERROR]\e[0m $*" >&2; exit 1; }
-log_user() { echo -e "  \e[1;34m[USER]\e[0m $*"; }
-log_err_u() { echo -e "  \e[1;31m[FAIL]\e[0m $*"; }
+SCRIPT_LOG="/tmp/setup_apps_$(date +%Y%m%d_%H%M%S).log"
+log_info() { echo -e "$(date '+%H:%M:%S') \e[1;32m[INFO]\e[0m  $*"; }
+log_warn() { echo -e "$(date '+%H:%M:%S') \e[1;33m[WARN]\e[0m  $*"; }
+log_error() { echo -e "$(date '+%H:%M:%S') \e[1;31m[ERROR]\e[0m $*" >&2; exit 1; }
+
+exec > >(tee -ai "${SCRIPT_LOG}") 2>&1
 
 usage() {
     echo "Usage: $0 [OPTIONS]"
@@ -91,6 +92,10 @@ sudo -u "${USER_NAME}" /bin/bash -c '
     PROGS_FILE="'${PROGS_FILE}'"
     SKIP_BUILD="'${SKIP_BUILD}'"
 
+    # Định nghĩa hàm log bên trong bash phụ
+    log_user() { echo -e "  \e[1;34m[USER]\e[0m $*"; }
+    log_err_u() { echo -e "  \e[1;31m[FAIL]\e[0m $*"; }
+
     git config --global http.version HTTP/1.1
     git config --global http.postBuffer 524288000
     git config --global http.sslVerify false
@@ -137,12 +142,15 @@ sudo -u "${USER_NAME}" /bin/bash -c '
                 progname="${program##*/}"; progname="${progname%.git}"
                 log_user "Build Git Repo: $progname"
                 cd "$SRC_DIR"
+                if [ -d "$progname" ] && [ ! -d "$progname/.git" ]; then
+                    rm -rf "$progname"
+                fi
                 [ ! -d "$progname" ] && git clone --depth 1 "$program"
                 cd "$progname" 2>/dev/null || continue
                 if [ -f "config.mk" ] || [ -f "Makefile" ]; then
                     # Build and install, logging details if it fails
                     if ! (make && sudo make install); then
-                        log_err_u "Lỗi biên dịch $progname. Xem log /tmp/install.log để biết chi tiết."
+                        log_err_u "Lỗi biên dịch $progname. Hãy kiểm tra các file log tại /var/log/ để biết chi tiết."
                         exit 1
                     fi
                 fi
@@ -152,3 +160,5 @@ sudo -u "${USER_NAME}" /bin/bash -c '
 '
 
 log_info "Cài đặt ứng dụng hoàn tất."
+mkdir -p /var/log
+cp "${SCRIPT_LOG}" /var/log/setup_apps.log 2>/dev/null || true

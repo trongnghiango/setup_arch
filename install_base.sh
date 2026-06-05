@@ -19,6 +19,9 @@ log_error() {
 }
 step() { echo -e "\n$(date '+%H:%M:%S') \e[1;34m>>> $*\e[0m"; }
 
+# Xác định thư mục chứa script
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+
 # Đảm bảo toàn bộ output được ghi log ngay từ đầu
 exec > >(tee -ai "${SCRIPT_LOG}") 2>&1
 
@@ -76,7 +79,16 @@ disk_prepare() {
     wipefs -af "$device" || true
     log_info "Tạo bảng phân vùng GPT mới..."
     sgdisk -og -n 1:2048:+512M -t 1:ef00 -n 2:0:0 -t 2:8e00 "$device" || log_error "sgdisk thất bại!"
-    PART_BOOT="${device}1"; PART_LVM="${device}2"
+    
+    # Logic xác định tên phân vùng chính xác (hỗ trợ NVMe, MMC, SD)
+    if [[ "$device" =~ [0-9]$ ]]; then
+        PART_BOOT="${device}p1"
+        PART_LVM="${device}p2"
+    else
+        PART_BOOT="${device}1"
+        PART_LVM="${device}2"
+    fi
+    
     log_info "Đồng bộ kernel..."
     udevadm settle || true
     blockdev --rereadpt "$device" || true
@@ -255,8 +267,14 @@ mount "${PART_BOOT}" /mnt/boot
 # Tối ưu hóa mirror
 pgp_fix_before_pacstrap
 log_info "Tối ưu hóa mirror..."
-pacman -Sy --noconfirm --needed reflector &>/dev/null
-reflector --country 'VN,SG,JP,HK,TW' --protocol https --sort rate --save /etc/pacman.d/mirrorlist
+if [ -f /etc/artix-release ]; then
+    curl -s "https://raw.githubusercontent.com/artix-linux/artix-mirrorlist/master/mirrorlist" -o /etc/pacman.d/mirrorlist 2>/dev/null || true
+else
+    # Dùng API mirrorstatus của Arch: trả về danh sách mirror đã được sắp xếp
+    # theo độ mới, không giới hạn quốc gia để có mirror ổn định và nhanh nhất
+    curl -s "https://archlinux.org/mirrorlist/?protocol=https&use_mirror_status=on" \
+        | sed 's/^#Server/Server/' > /etc/pacman.d/mirrorlist 2>/dev/null || true
+fi
 
 PACKAGES_TO_INSTALL=($(os_get_base_packages "$FILESYSTEM" "$DOTFILES_METHOD"))
 log_info "Bắt đầu cài đặt các gói CLI cơ bản vào /mnt..."
@@ -359,7 +377,7 @@ rm /mnt/root/chroot_config.sh
 
 # Lưu lại các file script cài đặt sang hệ thống mới để chạy offline/post-install dễ dàng
 mkdir -p /mnt/home/${USER_NAME}/setup_arch
-cp -r /home/ka/Repos/github.com/trongnghiango/setup_arch/* /mnt/home/${USER_NAME}/setup_arch/
+cp -r "${SCRIPT_DIR}"/* /mnt/home/${USER_NAME}/setup_arch/
 chown -R ${USER_NAME}:${USER_NAME} /mnt/home/${USER_NAME}/setup_arch/
 
 # Sao chép log setup_base vào phân vùng mới

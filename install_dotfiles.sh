@@ -5,8 +5,11 @@ IFS=$'\n\t'
 #==============================================================================
 # HÀM TIỆN ÍCH
 #==============================================================================
-log_info() { echo -e "\e[1;32m[INFO]\e[0m  $*"; }
-log_error() { echo -e "\e[1;31m[ERROR]\e[0m $*" >&2; exit 1; }
+SCRIPT_LOG="/tmp/setup_dotfiles_$(date +%Y%m%d_%H%M%S).log"
+log_info() { echo -e "$(date '+%H:%M:%S') \e[1;32m[INFO]\e[0m  $*"; }
+log_error() { echo -e "$(date '+%H:%M:%S') \e[1;31m[ERROR]\e[0m $*" >&2; exit 1; }
+
+exec > >(tee -ai "${SCRIPT_LOG}") 2>&1
 
 usage() {
     echo "Usage: $0 [OPTIONS]"
@@ -74,6 +77,10 @@ sudo -u "${USER_NAME}" /bin/bash -c '
     fi
 
     log_user "Cloning dotfiles từ ${REPO}..."
+    if [ -d "$DOTFILES_DIR" ] && [ ! -d "$DOTFILES_DIR/.git" ]; then
+        log_user "Thư mục dotfiles không hợp lệ (clone dang dở). Xóa và clone lại..."
+        rm -rf "$DOTFILES_DIR"
+    fi
     if [ ! -d "$DOTFILES_DIR" ]; then
         git clone --depth=1 --recurse-submodules "${REPO}" "${DOTFILES_DIR}"
     else
@@ -109,3 +116,5 @@ sudo -u "${USER_NAME}" /bin/bash -c '
 '
 
 log_info "Thiết lập dotfiles đã hoàn tất."
+mkdir -p /var/log
+cp "${SCRIPT_LOG}" /var/log/setup_dotfiles.log 2>/dev/null || true
