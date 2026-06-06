@@ -358,6 +358,8 @@ echo "${HOSTNAME}" > /etc/hostname
 pacman-key --init
 if [ -f /etc/artix-release ]; then
     pacman-key --populate artix
+    # Kích hoạt repo galaxy trên Artix để cài xcape, direnv, picom, v.v.
+    sed -i '/^#\[galaxy\]/,/^#Include/ { s/^#// }' /etc/pacman.conf
 else
     pacman-key --populate archlinux
 fi
