@@ -69,12 +69,14 @@ sort -n "$RESULTS" | head -20 > "$FASTEST"
 
 log_info "Top 20 server nhanh nhất (dưới 1 giây):"
 while IFS=' ' read -r latency url; do
-    if [ "$(echo "$latency < 1" | bc -l 2>/dev/null)" = "1" ]; then
-        printf "  ✅ %4.0fms  %s\n" "$(echo "$latency * 1000" | bc)" "$url"
-    elif [ "$latency" = "999" ]; then
-        :
+    if [ "$latency" = "999" ]; then
+        continue
+    fi
+    ms=$(awk -v l="$latency" 'BEGIN { printf "%.0f", l * 1000 }' 2>/dev/null || echo "?")
+    if [ "$ms" != "?" ] && [ "$ms" -lt 1000 ]; then
+        printf "  \u2705 %4sms  %s\n" "$ms" "$url"
     else
-        printf "  ⚠️ %4.0fms  %s\n" "$(echo "$latency * 1000 | bc" 2>/dev/null || echo "?")" "$url"
+        printf "  \u26a0\ufe0f %4sms  %s\n" "$ms" "$url"
     fi
 done < "$FASTEST"
 
