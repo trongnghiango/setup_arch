@@ -261,6 +261,16 @@ fi
 read -rp "CẢNH BÁO: Dữ liệu trên /dev/${DISK} sẽ bị XÓA SẠCH. Tiếp tục? [y/N]: " confirm
 if [[ ! "$confirm" =~ ^[Yy]$ ]]; then log_info "Đã hủy."; exit 0; fi
 
+# Dọn dẹp mount, swap, LVM, LUKS cũ để chạy lại an toàn
+log_info "Dọn dẹp mount, swap, LVM và LUKS cũ..."
+if mountpoint -q /mnt; then umount -R /mnt 2>/dev/null || true; fi
+swapoff -a 2>/dev/null || true
+vgchange -an vg0 2>/dev/null || true
+cryptsetup close cryptlvm 2>/dev/null || true
+
+# Cài đặt công cụ phân vùng và LVM trên Live environment
+pgp_fix_before_pacstrap
+pacman -Sy --noconfirm --needed parted gptfdisk lvm2
 
 # Thực hiện phân vùng
 DEVICE="/dev/${DISK}"
@@ -288,7 +298,6 @@ mkdir -p /mnt/boot
 mount "${PART_BOOT}" /mnt/boot
 
 # Cập nhật cơ sở dữ liệu pacman (mirrorlist đã được tối ưu riêng)
-pgp_fix_before_pacstrap
 log_info "Sử dụng mirrorlist hiện tại..."
 pacman -Syy --noconfirm
 
