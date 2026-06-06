@@ -52,17 +52,12 @@ case "$MODE" in
         exec "$SCRIPT_DIR/install_dotfiles.sh" "$@"
         ;;
     --all)
-        # Tiến trình COMBO chạy tuần tự trong Live USB
-        # Ghi log toàn bộ quá trình cài đặt ra file để dễ gỡ lỗi
         LOG_FILE="/tmp/install.log"
         log_info "Toàn bộ quá trình cài đặt sẽ được ghi vào file log: ${LOG_FILE}"
-        
-        {
-            step "BƯỚC 0: Tối ưu hóa mirror..."
-            "$SCRIPT_DIR/optimize_mirrors.sh"
 
+        {
             step "BƯỚC 1: Cài đặt hệ thống cơ bản..."
-            "$SCRIPT_DIR/install_base.sh" "$@"
+            "$SCRIPT_DIR/install_base.sh" "$@" || log_error "Cài đặt hệ thống cơ bản thất bại."
 
             # Trích xuất cấu hình vừa ghi trong install_vars.sh của phân vùng mới
             if [ ! -f /mnt/root/install_vars.sh ]; then
@@ -74,20 +69,20 @@ case "$MODE" in
             cp "$SCRIPT_DIR/install_apps.sh" /mnt/root/
             mkdir -p /mnt/tmp
             cp "$SCRIPT_DIR/progs.csv" /mnt/tmp/progs.csv
-            
+
             if command -v artix-chroot &>/dev/null; then
-                artix-chroot /mnt /root/install_apps.sh --user "${USER_NAME}" --progs-url "${PROGS_LIST_URL}"
+                artix-chroot /mnt /root/install_apps.sh --user "${USER_NAME}" --progs-url "${PROGS_LIST_URL}" || log_error "Cài đặt ứng dụng thất bại."
             else
-                arch-chroot /mnt /root/install_apps.sh --user "${USER_NAME}" --progs-url "${PROGS_LIST_URL}"
+                arch-chroot /mnt /root/install_apps.sh --user "${USER_NAME}" --progs-url "${PROGS_LIST_URL}" || log_error "Cài đặt ứng dụng thất bại."
             fi
 
             step "BƯỚC 3: Thiết lập dotfiles..."
             cp "$SCRIPT_DIR/install_dotfiles.sh" /mnt/root/
-            
+
             if command -v artix-chroot &>/dev/null; then
-                artix-chroot /mnt /root/install_dotfiles.sh --user "${USER_NAME}" --method "${DOTFILES_METHOD}" --repo "${DOTFILES_REPO}"
+                artix-chroot /mnt /root/install_dotfiles.sh --user "${USER_NAME}" --method "${DOTFILES_METHOD}" --repo "${DOTFILES_REPO}" || log_error "Thiết lập dotfiles thất bại."
             else
-                arch-chroot /mnt /root/install_dotfiles.sh --user "${USER_NAME}" --method "${DOTFILES_METHOD}" --repo "${DOTFILES_REPO}"
+                arch-chroot /mnt /root/install_dotfiles.sh --user "${USER_NAME}" --method "${DOTFILES_METHOD}" --repo "${DOTFILES_REPO}" || log_error "Thiết lập dotfiles thất bại."
             fi
 
             step "BƯỚC 4: Dọn dẹp hệ thống..."
@@ -102,7 +97,6 @@ case "$MODE" in
             fi
         } 2>&1 | tee "${LOG_FILE}"
 
-        # Sao chép file log vào hệ thống mới để người dùng kiểm tra sau khi boot
         if [ -d /mnt/var/log ]; then
             cp "${LOG_FILE}" /mnt/var/log/install.log
             log_info "Đã lưu bản sao log vào hệ thống mới tại /var/log/install.log"
