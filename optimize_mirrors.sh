@@ -57,7 +57,8 @@ while IFS= read -r line; do
     url=$(echo "$line" | sed "s/\$repo/$REPO/g; s/\$arch/$ARCH/g")
     idx=$((idx + 1))
     (
-        resp=$(curl -o /dev/null -s -k -w "%{http_code}:%{time_total}" --connect-timeout 2 "$url" 2>/dev/null || echo "000:999")
+        db_url="${url%/}/${REPO}.db"
+        resp=$(curl -o /dev/null -s -w "%{http_code}:%{time_total}" --connect-timeout 2 "$db_url" 2>/dev/null || echo "000:999")
         http_code="${resp%%:*}"
         latency="${resp##*:}"
         [ "$http_code" != "200" ] && latency="999"
