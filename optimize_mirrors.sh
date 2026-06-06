@@ -54,14 +54,23 @@ PID_LIST=""
 
 idx=0
 while IFS= read -r line; do
-    url=$(echo "$line" | sed "s/\$repo/$REPO/g; s/\$arch/$ARCH/g")
+    # TRÍCH XUẤT CHÍNH XÁC URL ĐỂ DÙNG CHO CURL (loại bỏ chữ "Server = ")
+    raw_url=$(echo "$line" | sed -E 's/^Server[[:space:]]*=[[:space:]]*//')
+    url=$(echo "$raw_url" | sed "s/\$repo/$REPO/g; s/\$arch/$ARCH/g")
+    
     idx=$((idx + 1))
     (
         db_url="${url%/}/${REPO}.db"
-        resp=$(curl -o /dev/null -s -w "%{http_code}:%{time_total}" --connect-timeout 2 "$db_url" 2>/dev/null || echo "000:999")
+        
+        # Thêm -m 4 (max-time 4s) để tránh treo nếu tải file db bị chậm
+        resp=$(curl -I -s -w "%{http_code}:%{time_total}" --connect-timeout 2 -m 4 "$db_url" 2>/dev/null || echo "000:999")
         http_code="${resp%%:*}"
         latency="${resp##*:}"
-        [ "$http_code" != "200" ] && latency="999"
+        
+        # Chấp nhận mã 200 (OK), hoặc 301/302/304 (Chuyển hướng hợp lệ)
+        if [[ ! "$http_code" =~ ^(200|301|302|304)$ ]]; then
+            latency="999"
+        fi
         echo "$latency $line" >> "$RESULTS"
     ) &
     PID_LIST="$PID_LIST $!"
@@ -73,32 +82,51 @@ done < <(grep "^Server" "$MIRRORLIST")
 wait $PID_LIST 2>/dev/null || true
 
 FASTEST=$(mktemp)
+# Sort theo số để tìm server nhanh nhất
 sort -n "$RESULTS" | head -20 > "$FASTEST"
 
-log_info "Top 20 server nhanh nhất (dưới 1 giây):"
-while IFS=' ' read -r latency url; do
+# Kiểm tra xem có server nào hoạt động không
+VALID_COUNT=$(awk '$1 != "999" {print}' "$FASTEST" | wc -l)
+if [ "$VALID_COUNT" -eq 0 ]; then
+    log_warn "Không có server nào hoạt động tốt (tất cả đều lỗi hoặc timeout)."
+    log_info "Khôi phục lại mirrorlist gốc..."
+    mv "${MIRRORLIST}.bak" "$MIRRORLIST"
+    rm -f "$RESULTS" "$FASTEST"
+    exit 1
+fi
+
+log_info "Top server nhanh nhất (dưới 1 giây):"
+while IFS=' ' read -r latency line; do
     if [ "$latency" = "999" ]; then
         continue
     fi
+    # Tách URL cho hiển thị log
+    raw_url=$(echo "$line" | sed -E 's/^Server[[:space:]]*=[[:space:]]*//')
+    
     ms=$(awk -v l="$latency" 'BEGIN { printf "%.0f", l * 1000 }' 2>/dev/null || echo "?")
     if [ "$ms" != "?" ] && [ "$ms" -lt 1000 ]; then
-        printf "  \u2705 %4sms  %s\n" "$ms" "$url"
+        printf "  \u2705 %4sms  %s\n" "$ms" "$raw_url"
     else
-        printf "  \u26a0\ufe0f %4sms  %s\n" "$ms" "$url"
+        printf "  \u26a0\ufe0f %4sms  %s\n" "$ms" "$raw_url"
     fi
 done < "$FASTEST"
 
-log_info "Cập nhật mirrorlist với các server nhanh nhất..."
+log_info "Cập nhật mirrorlist với các server phản hồi tốt..."
 grep -v "^Server" "$MIRRORLIST" > "${MIRRORLIST}.tmp"
+
+# CHỈ THÊM CÁC SERVER CÓ LATENCY KHÁC 999 VÀO MIRRORLIST
 while IFS=' ' read -r latency line; do
-    echo "$line" >> "${MIRRORLIST}.tmp"
+    if [ "$latency" != "999" ]; then
+        echo "$line" >> "${MIRRORLIST}.tmp"
+    fi
 done < "$FASTEST"
+
 mv "${MIRRORLIST}.tmp" "$MIRRORLIST"
-rm -f "$RESULTS" "$FASTEST" "${MIRRORLIST}.bak"
+rm -f "$RESULTS" "$FASTEST"
 
 log_info "Kiểm tra đồng bộ Pacman..."
 if pacman -Syy; then
     log_info "Đồng bộ Pacman thành công! Hệ thống đã sẵn sàng."
 else
-    log_error "Đồng bộ Pacman thất bại. Kiểm tra lại kết nối mạng hoặc chạy lại optimize_mirrors.sh."
+    log_error "Đồng bộ Pacman thất bại. Vui lòng kiểm tra lại kết nối mạng."
 fi
