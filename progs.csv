@@ -12,6 +12,8 @@
 ,xorg-xrandr," set resolution, mode, rate ."
 ,polkit,"manages user policies."
 ,ttf-font-awesome,"provides extended glyph support for icons in dwmblocks and status bar scripts."
+,ttf-nerd-fonts-symbols-common,"provides fallback Nerd Font glyphs to fix square symbol boxes."
+,cantarell-fonts,"provides standard system UI symbols."
 ,ttf-dejavu,"fallback font for emoji and unicode characters not covered by JetBrains Mono."
 ,ttf-jetbrains-mono-nerd, "primary monospace font for terminal, neovim, and UI elements."
 A,lf-git,"is an extensive terminal file manager. Dependency for lfcd function in .zshrc."

@@ -56,8 +56,12 @@ fi
 
 log_info "Tải danh sách gói..."
 PROGS_FILE="/tmp/progs.csv"
-if [ -f "/tmp/progs.csv" ]; then
-    log_info "Sử dụng tệp progs.csv có sẵn..."
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+if [ -f "$SCRIPT_DIR/progs.csv" ]; then
+    cp "$SCRIPT_DIR/progs.csv" "$PROGS_FILE"
+    log_info "Sử dụng progs.csv cục bộ..."
+elif [ -f "/tmp/progs.csv" ]; then
+    log_info "Sử dụng tệp progs.csv có sẵn tại /tmp..."
 else
     curl -Ls --retry 3 "${PROGS_LIST_URL}" | sed '/^#/d' > "${PROGS_FILE}"
 fi

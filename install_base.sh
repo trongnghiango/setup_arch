@@ -160,7 +160,7 @@ os_get_base_packages() {
     fi
     # Thêm sẵn các thư viện phát triển X11 và XCB phục vụ biên dịch các gói suckless
     local -a pkgs=(
-        base base-devel "$kernel" linux-firmware rsync xorg-xinit lvm2 grub efibootmgr sudo git curl neovim zsh dash libnewt
+        base base-devel "$kernel" linux-firmware rsync xorg-xinit lvm2 grub efibootmgr sudo git curl neovim zsh dash libnewt openssh
         libxcb xcb-util xcb-util-image xcb-util-keysyms xcb-util-wm
         libx11 libxft libxinerama libxrandr imlib2
     )
@@ -170,7 +170,7 @@ os_get_base_packages() {
     
     # Thêm service packages tương ứng với Init System
     case "$INIT_SYSTEM" in
-        openrc) pkgs+=(openrc elogind-openrc networkmanager-openrc lvm2-openrc) ;;
+        openrc) pkgs+=(openrc elogind-openrc networkmanager-openrc lvm2-openrc openssh-openrc) ;;
         runit)  pkgs+=(runit elogind-runit networkmanager-runit lvm2-runit) ;;
         s6)     pkgs+=(s6 elogind-s6 networkmanager-s6 lvm2-s6) ;;
         *)      pkgs+=(networkmanager) ;;
