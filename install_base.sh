@@ -360,6 +360,15 @@ if [ -f /etc/artix-release ]; then
     pacman-key --populate artix
     # Kích hoạt repo galaxy trên Artix để cài xcape, direnv, picom, v.v.
     sed -i '/^#\[galaxy\]/,/^#Include/ { s/^#// }' /etc/pacman.conf
+    # Kích hoạt repo extra của Arch Linux
+    pacman -S --noconfirm artix-archlinux-support
+    if ! grep -q "^\[extra\]" /etc/pacman.conf; then
+        tee -a /etc/pacman.conf > /dev/null << 'EOF'
+
+[extra]
+Include = /etc/pacman.d/mirrorlist-arch
+EOF
+    fi
 else
     pacman-key --populate archlinux
 fi
