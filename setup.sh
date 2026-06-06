@@ -46,10 +46,52 @@ case "$MODE" in
         exec "$SCRIPT_DIR/install_base.sh" "$@"
         ;;
     --apps)
-        exec "$SCRIPT_DIR/install_apps.sh" "$@"
+        if mountpoint -q /mnt; then
+            log_info "Phát hiện /mnt đang mount. Chạy install_apps.sh trong chroot..."
+            cp "$SCRIPT_DIR/install_apps.sh" /mnt/root/
+            mkdir -p /mnt/tmp
+            cp "$SCRIPT_DIR/progs.csv" /mnt/tmp/progs.csv
+            
+            # Đọc lại USER_NAME từ file cấu hình vars nếu có
+            USER_ARG="ka"
+            if [ -f /mnt/root/install_vars.sh ]; then
+                # source an toàn chỉ lấy biến USER_NAME
+                USER_ARG=$(grep -oP 'USER_NAME="\K[^"]+' /mnt/root/install_vars.sh || echo "ka")
+            fi
+            
+            if command -v artix-chroot &>/dev/null; then
+                artix-chroot /mnt /root/install_apps.sh --user "${USER_ARG}" "$@"
+            else
+                arch-chroot /mnt /root/install_apps.sh --user "${USER_ARG}" "$@"
+            fi
+            rm -f /mnt/root/install_apps.sh
+        else
+            exec "$SCRIPT_DIR/install_apps.sh" "$@"
+        fi
         ;;
     --dotfiles)
-        exec "$SCRIPT_DIR/install_dotfiles.sh" "$@"
+        if mountpoint -q /mnt; then
+            log_info "Phát hiện /mnt đang mount. Chạy install_dotfiles.sh trong chroot..."
+            cp "$SCRIPT_DIR/install_dotfiles.sh" /mnt/root/
+            
+            USER_ARG="ka"
+            METHOD_ARG="stow"
+            REPO_ARG=""
+            if [ -f /mnt/root/install_vars.sh ]; then
+                USER_ARG=$(grep -oP 'USER_NAME="\K[^"]+' /mnt/root/install_vars.sh || echo "ka")
+                METHOD_ARG=$(grep -oP 'DOTFILES_METHOD="\K[^"]+' /mnt/root/install_vars.sh || echo "stow")
+                REPO_ARG=$(grep -oP 'DOTFILES_REPO="\K[^"]+' /mnt/root/install_vars.sh || echo "")
+            fi
+            
+            if command -v artix-chroot &>/dev/null; then
+                artix-chroot /mnt /root/install_dotfiles.sh --user "${USER_ARG}" --method "${METHOD_ARG}" --repo "${REPO_ARG}" "$@"
+            else
+                arch-chroot /mnt /root/install_dotfiles.sh --user "${USER_ARG}" --method "${METHOD_ARG}" --repo "${REPO_ARG}" "$@"
+            fi
+            rm -f /mnt/root/install_dotfiles.sh
+        else
+            exec "$SCRIPT_DIR/install_dotfiles.sh" "$@"
+        fi
         ;;
     --all)
         LOG_FILE="/tmp/install.log"

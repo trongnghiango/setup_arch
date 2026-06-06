@@ -162,6 +162,7 @@ os_get_base_packages() {
     local -a pkgs=(
         base base-devel "$kernel" linux-firmware rsync xorg-xinit lvm2 grub efibootmgr sudo git curl neovim zsh dash libnewt
         libxcb xcb-util xcb-util-image xcb-util-keysyms xcb-util-wm
+        libx11 libxft libxinerama libxrandr imlib2
     )
     [ "$ENCRYPTION" = true ] && pkgs+=(cryptsetup)
     [ "$fs" = "btrfs" ] && pkgs+=(btrfs-progs)
