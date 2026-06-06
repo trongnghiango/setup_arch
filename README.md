@@ -1,118 +1,65 @@
-## Sử dụng
+# Bộ Script Cài Đặt Tự Động Arch/Artix Linux tối ưu
 
-```sh    
-./main.sh --disk vda
-```
-  
+Bộ script hỗ trợ cài đặt hệ thống Arch Linux hoặc Artix Linux nhanh chóng từ môi trường Live USB với giao diện DWM và cấu hình dotfiles tối ưu.
 
-(Sẽ dùng repo trong biến DOTFILES_RSYNC_REPO)
+## Yêu cầu
+- Máy ảo hoặc máy thật đang boot ở chế độ **UEFI** (Bắt buộc).
+- Kết nối mạng Internet hoạt động tốt.
 
-Sử dụng phương pháp stow với repo mặc định:
-```sh  
-./main.sh --disk vda --dotfiles-method stow
-```
-  
+## Hướng dẫn Sử dụng
 
-(Sẽ dùng repo trong biến DOTFILES_STOW_REPO)
+Bộ setup sử dụng script chính là `setup.sh`. Các bước thực hiện:
 
-Sử dụng phương pháp stow với một repo TÙY CHỈNH:
-
-```sh
-./main.sh --disk vda --dotfiles-method stow --dotfiles-repo "https://github.com/another-user/another-stow-dots.git"
-```
-      
-
-    (Sẽ bỏ qua các repo mặc định và dùng URL bạn vừa cung cấp)
-
-Với cách này, script đã xử lý đúng trường hợp của bạn và còn cung cấp thêm sự linh hoạt để thử nghiệm các repo khác một cách dễ dàng. Chúc bạn thành công
-
-
-**Không bao giờ được chạy `pacman -Syu` trên môi trường Arch Live ISO.** Lệnh đó là để nâng cấp hệ thống đã cài đặt, không phải môi trường cài đặt. Tôi đã đưa ra hướng dẫn sai và ngu ngốc. Cảm ơn đã chỉ ra lỗi đó.
-
-Bỏ hết mấy cái tôi nói trước đi. Chúng ta làm lại, lần này cho đúng. **Chỉ tập trung vào mục tiêu là chạy `pacstrap` cho thành công.**
-
-Đây là cách chính xác 100% để vượt qua lỗi này trên Arch Live, không lòng vòng nữa.
-
----
-
-### Cách làm đúng để chạy `PACSTRAP` trên ARCH LIVE
-
-**Mục tiêu:** Tạm thời bỏ qua kiểm tra chữ ký PGP để `pacstrap` có thể tải và cài đặt gói tin vào `/mnt`.
-
-**Bước 1: Sửa file cấu hình Pacman của môi trường LIVE**
-
-Mở file `/etc/pacman.conf` bằng nano:
-
+### Chạy tự động tất cả các bước (Một lệnh ăn ngay):
 ```bash
-nano /etc/pacman.conf
+./setup.sh --all --disk <tên_ổ_đĩa>
 ```
-
-**Bước 2: Tìm và sửa `SigLevel`**
-
-Trong file đó, tìm đến dòng `SigLevel = Required DatabaseOptional`.
-Sửa nó thành `SigLevel = Never`.
-
-**Nó sẽ trông như thế này:**
-
-```
-[options]
-...
-#SigLevel    = Required DatabaseOptional
-SigLevel    = Never
-...
-```
-
-Lưu file lại (`Ctrl+O`, `Enter`) và thoát (`Ctrl+X`).
-
-**Bước 3: Tải lại cơ sở dữ liệu Pacman**
-
-Lệnh này sẽ áp dụng thay đổi bạn vừa làm. Nó chạy rất nhanh.
-
+Ví dụ với ổ đĩa ảo `vda`:
 ```bash
-pacman -Syy
+./setup.sh --all --disk vda
 ```
 
-**Bước 4: Chạy `pacstrap`**
+### Chạy chi tiết từng giai đoạn:
 
-Bây giờ lệnh `pacstrap` sẽ chạy mà không gặp bất kỳ lỗi chữ ký nào nữa.
+1. **Tối ưu hóa gương tải gói (Mirrors):**
+   ```bash
+   ./setup.sh --mirrors
+   ```
 
+2. **Cài đặt hệ điều hành tối giản (CLI Base):**
+   ```bash
+   ./setup.sh --base --disk <tên_ổ_đĩa>
+   ```
+
+3. **Cài đặt ứng dụng & build DWM (sau khi đã chroot):**
+   ```bash
+   ./setup.sh --apps
+   ```
+
+4. **Thiết lập dotfiles:**
+   ```bash
+   ./setup.sh --dotfiles
+   ```
+
+## Tùy chọn dotfiles nâng cao
+
+### Sử dụng phương thức stow (mặc định):
 ```bash
-pacstrap -K /mnt base linux linux-firmware nano
+./setup.sh --all --disk vda
 ```
 
----
-
-### Bước 5: VIỆC CỰC KỲ QUAN TRỌNG SAU KHI CÀI ĐẶT
-
-Khi `pacstrap` chạy xong, bạn phải bật lại chức năng bảo mật này trên hệ thống mới.
-
-**1. Chroot vào hệ thống vừa cài:**
-
+### Sử dụng phương thức rsync:
 ```bash
-arch-chroot /mnt
+./setup.sh --all --disk vda --dotfiles-method rsync
 ```
 
-**2. Sửa file `/etc/pacman.conf` (của hệ thống MỚI):**
-
+### Sử dụng repo dotfiles tùy chỉnh:
 ```bash
-nano /etc/pacman.conf
+./setup.sh --all --disk vda --dotfiles-method stow --dotfiles-repo "https://github.com/username/dotfiles.git"
 ```
 
-**3. Trả `SigLevel` về như cũ:**
-
-Sửa dòng `SigLevel = Never` trở lại thành `SigLevel = Required DatabaseOptional`.
-
-**4. Khởi tạo và nạp Keyring cho hệ thống MỚI:**
-
-```bash
-pacman-key --init
-pacman-key --populate archlinux
-```
-
-**5. Bây giờ bạn có thể cập nhật hệ thống mới một cách an toàn:**
-
-```bash
-pacman -Syu
-```
-
-Lần này tôi chắc chắn cách làm này là đúng cho ngữ cảnh Arch Live và sẽ giải quyết được vấn đề của bạn. Một lần nữa, thành thật xin lỗi vì những hướng dẫn sai lầm và gây bực tức trước đó.
+## Các điểm lưu ý trong phiên bản này
+- Tự động kiểm tra và cài đặt các công cụ phân vùng (`parted`, `gptfdisk`, `lvm2`) trên môi trường Live trước khi chạy.
+- Tự động tắt swap, unmount `/mnt`, tắt LVM/LUKS cũ để đảm bảo chạy lại script không bị lỗi "Device or resource busy".
+- Đã sửa lỗi cấu hình PGP Keyring trên Live USB giúp quá trình tải gói tin qua `pacstrap` ổn định mà không lo lỗi Signature.
+- Sử dụng danh sách phần mềm từ file local `progs.csv` trong suốt quá trình chroot.
