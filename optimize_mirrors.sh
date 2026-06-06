@@ -42,8 +42,12 @@ if [ "$SERVER_COUNT" -eq 0 ]; then
 fi
 log_info "Tìm thấy $SERVER_COUNT server trong mirrorlist."
 
-log_info "Đo tốc độ kết nối đến các server..."
-REPO="core"
+log_info "Đo tốc độ và kiểm tra HTTP status đến các server..."
+if grep -qi "artix" /etc/os-release 2>/dev/null; then
+    REPO="system"
+else
+    REPO="core"
+fi
 ARCH=$(uname -m)
 RESULTS=$(mktemp)
 PID_LIST=""
@@ -53,7 +57,10 @@ while IFS= read -r line; do
     url=$(echo "$line" | sed "s/\$repo/$REPO/g; s/\$arch/$ARCH/g")
     idx=$((idx + 1))
     (
-        latency=$(curl -o /dev/null -s -k -w "%{time_connect}" --connect-timeout 2 "$url" 2>/dev/null || echo "999")
+        resp=$(curl -o /dev/null -s -k -w "%{http_code}:%{time_total}" --connect-timeout 2 "$url" 2>/dev/null || echo "000:999")
+        http_code="${resp%%:*}"
+        latency="${resp##*:}"
+        [ "$http_code" != "200" ] && latency="999"
         echo "$latency $line" >> "$RESULTS"
     ) &
     PID_LIST="$PID_LIST $!"
