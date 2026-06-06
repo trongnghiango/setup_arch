@@ -1,5 +1,12 @@
 #TAG,NAME IN REPO (or git url),PURPOSE (should be a verb phrase to sound right while installing)
 ,xorg-server,"is the graphical server. This first one may take a while as it pulls many other dependencies first on clean installs."
+,xf86-input-libinput,"is the generic input driver for keyboard, mouse and touchpad in X11."
+,mesa,"is the GPU userspace 3D graphics library for hardware acceleration."
+,mesa-utils,"provides GLX diagnostic utilities (glxinfo/glxgears)."
+,xorg-xkbcomp,"compiles XKB keyboard descriptions."
+,xorg-xinput,"utility to configure and test XInput devices."
+,sof-firmware,"is the Sound Open Firmware for Intel/AMD audio DSP."
+,libxft,"is the FreeType-based font drawing library for X11."
 ,xorg-xwininfo,"allows querying information about windows."
 ,xorg-xinit,"starts the graphical server."
 ,xorg-xset,"utility for configuring and ajusting X server"

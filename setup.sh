@@ -72,7 +72,8 @@ case "$MODE" in
 
             step "BƯỚC 2: Cài đặt ứng dụng và build suckless..."
             cp "$SCRIPT_DIR/install_apps.sh" /mnt/root/
-            cp "$SCRIPT_DIR/progs.csv" /mnt/tmp/ 2>/dev/null || true
+            mkdir -p /mnt/tmp
+            cp "$SCRIPT_DIR/progs.csv" /mnt/tmp/progs.csv
             
             if command -v artix-chroot &>/dev/null; then
                 artix-chroot /mnt /root/install_apps.sh --user "${USER_NAME}" --progs-url "${PROGS_LIST_URL}"

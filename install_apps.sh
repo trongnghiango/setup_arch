@@ -56,7 +56,11 @@ fi
 
 log_info "Tải danh sách gói..."
 PROGS_FILE="/tmp/progs.csv"
-curl -Ls --retry 3 "${PROGS_LIST_URL}" | sed '/^#/d' > "${PROGS_FILE}"
+if [ -f "/tmp/progs.csv" ]; then
+    log_info "Sử dụng tệp progs.csv có sẵn..."
+else
+    curl -Ls --retry 3 "${PROGS_LIST_URL}" | sed '/^#/d' > "${PROGS_FILE}"
+fi
 [ ! -s "${PROGS_FILE}" ] && log_error "Danh sách gói trống hoặc không tải được."
 
 #==============================================================================
