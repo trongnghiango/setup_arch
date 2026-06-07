@@ -362,6 +362,7 @@ if [ -f /etc/artix-release ]; then
     sed -i '/^#\[galaxy\]/,/^#Include/ { s/^#// }' /etc/pacman.conf
     # Kích hoạt repo extra của Arch Linux
     pacman -S --noconfirm artix-archlinux-support
+    pacman-key --populate archlinux
     if ! grep -q "^\[extra\]" /etc/pacman.conf; then
         tee -a /etc/pacman.conf > /dev/null << 'EOF'
 
