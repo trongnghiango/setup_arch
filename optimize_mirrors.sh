@@ -39,7 +39,9 @@ USE_RATE_MIRRORS=false
 RATE_MIRRORS_BIN="/tmp/rate-mirrors"
 
 log_info "Thử tải công cụ rate-mirrors từ GitHub..."
-if curl -sL --connect-timeout 4 -m 15 "https://github.com/westandskif/rate-mirrors/releases/latest/download/rate-mirrors-x86_64-unknown-linux-musl.tar.gz" | tar -xz -C /tmp 2>/dev/null; then
+# Lấy URL download động của phiên bản mới nhất từ API GitHub (có chứa số version trong tên file)
+DOWNLOAD_URL=$(curl -s https://api.github.com/repos/westandskif/rate-mirrors/releases/latest | grep -o 'https://github.com/westandskif/rate-mirrors/releases/download/[^"]*-x86_64-unknown-linux-musl.tar.gz' | head -n 1)
+if [ -n "$DOWNLOAD_URL" ] && curl -sL --connect-timeout 4 -m 15 "$DOWNLOAD_URL" | tar -xz -C /tmp 2>/dev/null; then
     if [ -x "$RATE_MIRRORS_BIN" ]; then
         USE_RATE_MIRRORS=true
     fi
