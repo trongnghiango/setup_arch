@@ -76,7 +76,7 @@ if [ -f "$SCRIPT_DIR/progs.csv" ]; then
 elif [ -f "/tmp/progs.csv" ]; then
     log_info "Sử dụng tệp progs.csv có sẵn tại /tmp..."
 else
-    curl -Ls --retry 3 "${PROGS_LIST_URL}" | sed '/^#/d' > "${PROGS_FILE}"
+    curl -Lsk --retry 3 "${PROGS_LIST_URL}" | sed '/^#/d' > "${PROGS_FILE}"
 fi
 [ ! -s "${PROGS_FILE}" ] && log_error "Danh sách gói trống hoặc không tải được."
 

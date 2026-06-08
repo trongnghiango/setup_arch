@@ -33,7 +33,8 @@ log_info "Sao lưu mirrorlist gốc..."
 cp "$MIRRORLIST" "${MIRRORLIST}.bak"
 
 log_info "Tải danh sách mirror chính thức từ Artix Gitea..."
-if curl -sL --connect-timeout 4 -m 15 -o "$MIRRORLIST" "https://gitea.artixlinux.org/packages/artix-mirrorlist/raw/branch/master/mirrorlist"; then
+# Dùng thêm -k để bỏ qua lỗi chứng chỉ SSL (expired CA certs) phổ biến trên Live ISO cũ
+if curl -skL --connect-timeout 4 -m 15 -o "$MIRRORLIST" "https://gitea.artixlinux.org/packages/artix-mirrorlist/raw/branch/master/mirrorlist"; then
     log_info "Đã tải thành công mirrorlist mới nhất."
 else
     log_warn "Tải mirrorlist mới thất bại, sử dụng mirrorlist có sẵn của Live ISO."
@@ -46,9 +47,9 @@ USE_RATE_MIRRORS=false
 RATE_MIRRORS_BIN="/tmp/rate-mirrors"
 
 log_info "Thử tải công cụ rate-mirrors từ GitHub..."
-# Lấy URL download động của phiên bản mới nhất từ API GitHub (có chứa số version trong tên file)
-DOWNLOAD_URL=$(curl -s https://api.github.com/repos/westandskif/rate-mirrors/releases/latest | grep -o 'https://github.com/westandskif/rate-mirrors/releases/download/[^"]*-x86_64-unknown-linux-musl.tar.gz' | head -n 1)
-if [ -n "$DOWNLOAD_URL" ] && curl -sL --connect-timeout 4 -m 15 "$DOWNLOAD_URL" | tar -xz -C /tmp 2>/dev/null; then
+# Lấy URL download động và dùng -k để bỏ qua kiểm tra SSL của GitHub API đề phòng Live ISO bị lỗi CA certs
+DOWNLOAD_URL=$(curl -sk https://api.github.com/repos/westandskif/rate-mirrors/releases/latest | grep -o 'https://github.com/westandskif/rate-mirrors/releases/download/[^"]*-x86_64-unknown-linux-musl.tar.gz' | head -n 1)
+if [ -n "$DOWNLOAD_URL" ] && curl -skL --connect-timeout 4 -m 15 "$DOWNLOAD_URL" | tar -xz -C /tmp 2>/dev/null; then
     if [ -x "$RATE_MIRRORS_BIN" ]; then
         USE_RATE_MIRRORS=true
     fi
@@ -112,8 +113,8 @@ while IFS= read -r line; do
     idx=$((idx + 1))
     (
         db_url="${url%/}/${REPO}.db"
-        # Dùng GET request với Range 0-0 (chỉ tải 1 byte) kèm User-Agent để tránh bị CDN/Firewall block (trả về 403/404/405)
-        resp=$(curl -s -o /dev/null -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -w "%{http_code}:%{time_total}" -r 0-0 --connect-timeout 2 -m 4 "$db_url" 2>/dev/null || echo "000:999")
+        # Dùng GET request với Range 0-0 (chỉ tải 1 byte) kèm User-Agent và -k để tránh bị CDN/Firewall block hoặc lỗi SSL
+        resp=$(curl -sk -o /dev/null -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -w "%{http_code}:%{time_total}" -r 0-0 --connect-timeout 2 -m 4 "$db_url" 2>/dev/null || echo "000:999")
         http_code="${resp%%:*}"
         latency="${resp##*:}"
         
