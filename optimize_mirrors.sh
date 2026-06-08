@@ -61,9 +61,8 @@ while IFS= read -r line; do
     idx=$((idx + 1))
     (
         db_url="${url%/}/${REPO}.db"
-        
-        # Thêm -m 4 (max-time 4s) để tránh treo nếu tải file db bị chậm
-        resp=$(curl -I -s -w "%{http_code}:%{time_total}" --connect-timeout 2 -m 4 "$db_url" 2>/dev/null || echo "000:999")
+        # Dùng GET request với Range 0-0 (chỉ tải 1 byte) kèm User-Agent để tránh bị CDN/Firewall block (trả về 403/404/405)
+        resp=$(curl -s -o /dev/null -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -w "%{http_code}:%{time_total}" -r 0-0 --connect-timeout 2 -m 4 "$db_url" 2>/dev/null || echo "000:999")
         http_code="${resp%%:*}"
         latency="${resp##*:}"
         
