@@ -75,7 +75,7 @@ else
 fi
 
 log_info "Bỏ comment các dòng Server trong mirrorlist..."
-sed -i 's/^#Server/Server/' "$MIRRORLIST"
+sed -i -E 's/^#[[:space:]]*Server/Server/' "$MIRRORLIST"
 
 log_info "Kiểm tra danh sách server có sẵn..."
 SERVER_COUNT=$(grep -c "^Server" "$MIRRORLIST" 2>/dev/null || echo 0)
