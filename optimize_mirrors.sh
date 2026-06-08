@@ -32,12 +32,14 @@ fi
 log_info "Ghi danh sách mirror chính thức đã kiểm nghiệm của Artix Linux..."
 tee "$MIRRORLIST" > /dev/null << 'EOF'
 # Default stable official mirrors (Verified 100% active)
-Server = https://mirror.funami.tech/artix/$repo/os/$arch
+# Tsinghua đặt ở đầu vì băng thông cực tốt tại khu vực châu Á và tương thích tốt HTTP/2
 Server = https://mirrors.tuna.tsinghua.edu.cn/artixlinux/$repo/os/$arch
 Server = https://ftp.sh.cvut.cz/artix-linux/$repo/os/$arch
 Server = https://mirrors.dotsrc.org/artix-linux/repos/$repo/os/$arch
 Server = https://mirrors.rit.edu/artixlinux/$repo/os/$arch
 Server = https://ftp.crifo.org/artix/repos/$repo/os/$arch
+# Funami hỗ trợ tốt nhưng libcurl trên Live ISO cũ gặp lỗi HTTP/2 reset với server này nên xếp cuối làm dự phòng
+Server = https://mirror.funami.tech/artix/$repo/os/$arch
 EOF
 
 log_info "Đồng bộ lại database Pacman với các server chính thức..."
