@@ -32,6 +32,13 @@ fi
 log_info "Sao lưu mirrorlist gốc..."
 cp "$MIRRORLIST" "${MIRRORLIST}.bak"
 
+log_info "Tải danh sách mirror chính thức từ Artix Gitea..."
+if curl -sL --connect-timeout 4 -m 15 -o "$MIRRORLIST" "https://gitea.artixlinux.org/packages/artix-mirrorlist/raw/branch/master/mirrorlist"; then
+    log_info "Đã tải thành công mirrorlist mới nhất."
+else
+    log_warn "Tải mirrorlist mới thất bại, sử dụng mirrorlist có sẵn của Live ISO."
+fi
+
 #==============================================================================
 # THỬ DÙNG RATE-MIRRORS (NHANH & CHÍNH XÁC)
 #==============================================================================
