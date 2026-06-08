@@ -376,15 +376,19 @@ if [ -f /etc/artix-release ]; then
 
     # Kích hoạt repo galaxy và universe trên Artix để cài xcape, direnv, picom, v.v.
     sed -i '/^#\[galaxy\]/,/^#Include/ { s/^#// }' /etc/pacman.conf
-    if grep -q "^#\[universe\]" /etc/pacman.conf; then
-        sed -i '/^#\[universe\]/,/^#Include/ { s/^#// }' /etc/pacman.conf
-    elif ! grep -q "^\[universe\]" /etc/pacman.conf; then
-        tee -a /etc/pacman.conf > /dev/null << 'EOF'
+    
+    # Xóa hoàn toàn cấu hình [universe] cũ (commented hoặc uncommented) để tránh xung đột hoặc dùng sai mirrorlist
+    sed -i '/^#*\[universe\]/,/^[[:space:]]*$/d' /etc/pacman.conf
+    
+    # Thêm cấu hình [universe] mới với các mirror chính thức hỗ trợ universe
+    tee -a /etc/pacman.conf > /dev/null << 'EOF'
 
 [universe]
-Include = /etc/pacman.d/mirrorlist
+Server = https://universe.artixlinux.org/$arch
+Server = https://mirror1.artixlinux.org/universe/$arch
+Server = https://mirror.pascalpuffke.de/artix-universe/$arch
+Server = https://artix.drakon.rocks/universe/$arch
 EOF
-    fi
     # Đồng bộ database sau khi kích hoạt repo mới
     pacman -Sy
     # Cài đặt/cập nhật keyring mới nhất của Artix và Arch
