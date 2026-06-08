@@ -3,7 +3,7 @@ set -euo pipefail
 IFS=$'\n\t'
 
 #==============================================================================
-# Cấu hình mirrorlist chính thức và đáng tin cậy của Artix Linux (Đã kiểm tra hoạt động)
+# Cấu hình mirrorlist chính thức và đáng tin cậy cho cả Artix và Arch Linux
 #==============================================================================
 SCRIPT_TIME="$(date +%Y%m%d_%H%M%S)"
 SCRIPT_LOG="/tmp/optimize_mirrors_${SCRIPT_TIME}.log"
@@ -29,18 +29,28 @@ if [ -f "$MIRRORLIST" ]; then
     cp "$MIRRORLIST" "${MIRRORLIST}.bak"
 fi
 
-log_info "Ghi danh sách mirror chính thức đã kiểm nghiệm của Artix Linux..."
-tee "$MIRRORLIST" > /dev/null << 'EOF'
-# Default stable official mirrors (Verified 100% active)
-# Tsinghua đặt ở đầu vì băng thông cực tốt tại khu vực châu Á và tương thích tốt HTTP/2
+if grep -qi "artix" /etc/os-release 2>/dev/null; then
+    log_info "Phát hiện hệ thống Artix Linux. Ghi các mirror Artix đáng tin cậy..."
+    tee "$MIRRORLIST" > /dev/null << 'EOF'
+# Default stable official mirrors for Artix Linux (Verified active)
 Server = https://mirrors.tuna.tsinghua.edu.cn/artixlinux/$repo/os/$arch
 Server = https://ftp.sh.cvut.cz/artix-linux/$repo/os/$arch
 Server = https://mirrors.dotsrc.org/artix-linux/repos/$repo/os/$arch
 Server = https://mirrors.rit.edu/artixlinux/$repo/os/$arch
 Server = https://ftp.crifo.org/artix/repos/$repo/os/$arch
-# Funami hỗ trợ tốt nhưng libcurl trên Live ISO cũ gặp lỗi HTTP/2 reset với server này nên xếp cuối làm dự phòng
 Server = https://mirror.funami.tech/artix/$repo/os/$arch
 EOF
+else
+    log_info "Phát hiện hệ thống Arch Linux. Ghi các mirror Arch đáng tin cậy..."
+    tee "$MIRRORLIST" > /dev/null << 'EOF'
+# Default stable official mirrors for Arch Linux (Verified active)
+Server = https://geo.mirror.pkgbuild.com/$repo/os/$arch
+Server = https://mirrors.tuna.tsinghua.edu.cn/archlinux/$repo/os/$arch
+Server = https://mirror.funami.tech/archlinux/$repo/os/$arch
+Server = https://mirrors.kernel.org/archlinux/$repo/os/$arch
+Server = https://mirror.rackspace.com/archlinux/$repo/os/$arch
+EOF
+fi
 
 log_info "Đồng bộ lại database Pacman với các server chính thức..."
 if pacman -Syy --noconfirm; then
