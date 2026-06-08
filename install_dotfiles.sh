@@ -6,8 +6,17 @@ IFS=$'\n\t'
 # HÀM TIỆN ÍCH
 #==============================================================================
 SCRIPT_LOG="/tmp/setup_dotfiles_$(date +%Y%m%d_%H%M%S).log"
+ERROR_LOG="/tmp/install_errors.log"
+# Đảm bảo file tồn tại và cho phép ghi rộng rãi
+touch "${ERROR_LOG}" && chmod 666 "${ERROR_LOG}" || true
+
 log_info() { echo -e "$(date '+%H:%M:%S') \e[1;32m[INFO]\e[0m  $*"; }
-log_error() { echo -e "$(date '+%H:%M:%S') \e[1;31m[ERROR]\e[0m $*" >&2; exit 1; }
+log_error() { 
+    local msg="$(date '+%H:%M:%S') [ERROR] $*"
+    echo -e "$(date '+%H:%M:%S') \e[1;31m[ERROR]\e[0m $*" >&2
+    echo -e "${msg}" >> "${ERROR_LOG}"
+    exit 1; 
+}
 
 exec > >(tee -ai "${SCRIPT_LOG}") 2>&1
 

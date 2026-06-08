@@ -5,8 +5,17 @@ IFS=$'\n\t'
 #==============================================================================
 # SCRIPT ENTRYPOINT CHÍNH CỦA BỘ SETUP
 #==============================================================================
-log_info() { echo -e "\e[1;32m[INFO]\e[0m  $*"; }
-log_error() { echo -e "\e[1;31m[ERROR]\e[0m $*" >&2; exit 1; }
+ERROR_LOG="/tmp/install_errors.log"
+# Đảm bảo file log lỗi được khởi tạo sạch sẽ
+echo -n "" > "${ERROR_LOG}"
+
+log_info() { echo -e "$(date '+%H:%M:%S') \e[1;32m[INFO]\e[0m  $*"; }
+log_error() { 
+    local msg="$(date '+%H:%M:%S') [ERROR] $*"
+    echo -e "$(date '+%H:%M:%S') \e[1;31m[ERROR]\e[0m $*" >&2
+    echo -e "${msg}" >> "${ERROR_LOG}"
+    exit 1
+}
 step() { echo -e "\n\e[1;34m>>> $*\e[0m"; }
 
 # Đổi thư mục làm việc về thư mục chứa script
@@ -141,7 +150,15 @@ case "$MODE" in
 
         if [ -d /mnt/var/log ]; then
             cp "${LOG_FILE}" /mnt/var/log/install.log
-            log_info "Đã lưu bản sao log vào hệ thống mới tại /var/log/install.log"
+            log_info "Đã lưu bản sao log thông tin vào hệ thống mới tại /var/log/install.log"
+            
+            # Gộp và lưu log lỗi
+            [ -f "${ERROR_LOG}" ] && cp "${ERROR_LOG}" /mnt/var/log/install_errors.log || touch /mnt/var/log/install_errors.log
+            if [ -f /mnt/tmp/install_errors.log ]; then
+                cat /mnt/tmp/install_errors.log >> /mnt/var/log/install_errors.log
+                rm -f /mnt/tmp/install_errors.log
+            fi
+            log_info "Đã lưu bản sao log cảnh báo và lỗi tại /var/log/install_errors.log"
         fi
 
         log_info "CÀI ĐẶT HOÀN TẤT TOÀN BỘ HỆ THỐNG!"

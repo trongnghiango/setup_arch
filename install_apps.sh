@@ -3,9 +3,22 @@ set -euo pipefail
 IFS=$'\n\t'
 
 SCRIPT_LOG="/tmp/setup_apps_$(date +%Y%m%d_%H%M%S).log"
+ERROR_LOG="/tmp/install_errors.log"
+# Đảm bảo file tồn tại và cho phép ghi rộng rãi
+touch "${ERROR_LOG}" && chmod 666 "${ERROR_LOG}" || true
+
 log_info() { echo -e "$(date '+%H:%M:%S') \e[1;32m[INFO]\e[0m  $*"; }
-log_warn() { echo -e "$(date '+%H:%M:%S') \e[1;33m[WARN]\e[0m  $*"; }
-log_error() { echo -e "$(date '+%H:%M:%S') \e[1;31m[ERROR]\e[0m $*" >&2; exit 1; }
+log_warn() { 
+    local msg="$(date '+%H:%M:%S') [WARN] $*"
+    echo -e "$(date '+%H:%M:%S') \e[1;33m[WARN]\e[0m  $*"
+    echo -e "${msg}" >> "${ERROR_LOG}"
+}
+log_error() { 
+    local msg="$(date '+%H:%M:%S') [ERROR] $*"
+    echo -e "$(date '+%H:%M:%S') \e[1;31m[ERROR]\e[0m $*" >&2
+    echo -e "${msg}" >> "${ERROR_LOG}"
+    exit 1; 
+}
 
 exec > >(tee -ai "${SCRIPT_LOG}") 2>&1
 
@@ -101,7 +114,11 @@ sudo -u "${USER_NAME}" /bin/bash -c '
     SKIP_BUILD="'${SKIP_BUILD}'"
 
     log_user() { echo -e "  \e[1;34m[USER]\e[0m $*"; }
-    log_err_u() { echo -e "  \e[1;31m[FAIL]\e[0m $*"; }
+    log_err_u() { 
+        local msg="$(date '+%H:%M:%S') [FAIL] $*"
+        echo -e "  \e[1;31m[FAIL]\e[0m $*"
+        echo -e "${msg}" >> "'${ERROR_LOG}'"
+    }
 
     # Cài đặt thủ công từ AUR Snapshot (dự phòng)
     install_manual() {

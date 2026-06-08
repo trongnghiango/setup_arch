@@ -17,10 +17,17 @@ fi
 #==============================================================================
 SCRIPT_TIME="$(date +%Y%m%d_%H%M%S)"
 SCRIPT_LOG="/tmp/setup_base_${SCRIPT_TIME}.log"
+ERROR_LOG="/tmp/install_errors.log"
 log_info() { echo -e "$(date '+%H:%M:%S') \e[1;32m[INFO]\e[0m  $*"; }
-log_warn() { echo -e "$(date '+%H:%M:%S') \e[1;33m[WARN]\e[0m  $*"; }
+log_warn() { 
+    local msg="$(date '+%H:%M:%S') [WARN] $*"
+    echo -e "$(date '+%H:%M:%S') \e[1;33m[WARN]\e[0m  $*"
+    echo -e "${msg}" >> "${ERROR_LOG}"
+}
 log_error() {
+    local msg="$(date '+%H:%M:%S') [ERROR] $*"
     echo -e "$(date '+%H:%M:%S') \e[1;31m[ERROR]\e[0m $*" >&2
+    echo -e "${msg}" >> "${ERROR_LOG}"
     exit 1
 }
 step() { echo -e "\n$(date '+%H:%M:%S') \e[1;34m>>> $*\e[0m"; }
@@ -358,8 +365,19 @@ echo "${HOSTNAME}" > /etc/hostname
 pacman-key --init
 if [ -f /etc/artix-release ]; then
     pacman-key --populate artix
-    # Kích hoạt repo galaxy trên Artix để cài xcape, direnv, picom, v.v.
+    # Kích hoạt repo galaxy và universe trên Artix để cài xcape, direnv, picom, v.v.
     sed -i '/^#\[galaxy\]/,/^#Include/ { s/^#// }' /etc/pacman.conf
+    if grep -q "^#\[universe\]" /etc/pacman.conf; then
+        sed -i '/^#\[universe\]/,/^#Include/ { s/^#// }' /etc/pacman.conf
+    elif ! grep -q "^\[universe\]" /etc/pacman.conf; then
+        tee -a /etc/pacman.conf > /dev/null << 'EOF'
+
+[universe]
+Include = /etc/pacman.d/mirrorlist
+EOF
+    fi
+    # Đồng bộ database sau khi kích hoạt repo mới
+    pacman -Sy
     # Kích hoạt repo extra của Arch Linux
     pacman -S --noconfirm artix-archlinux-support
     pacman-key --populate archlinux
