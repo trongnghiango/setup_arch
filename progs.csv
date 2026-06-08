@@ -18,6 +18,7 @@
 ,xorg-xsetroot,"[2] sets window parameters of the root window."
 ,xorg-xwininfo,"[2] allows querying information about windows."
 ,xorg-setxkbmap,"[2] is the keyboard layout configuration utility."
+,xf86-input-libinput,"[2] is the generic input driver for X Server to enable keyboard and mouse."
 ,harfbuzz,"[2] is the OpenType text shaping engine required to compile st with ligatures support."
 ,picom,"[2] modern X compositor for transparency and removing screen-tearing; uses glx backend with vsync."
 ,lxappearance,"[2] is the GTK theme and icon configurator."
