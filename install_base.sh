@@ -345,6 +345,20 @@ PART_LVM_UUID=$(disk_get_pv_uuid "$PART_LVM")
 HOOKS_LINE=$(initramfs_get_hooks "$FILESYSTEM")
 KERNEL_CMDLINE=$(bootloader_get_kernel_cmdline "$PART_LVM_UUID")
 
+# Tạo cấu hình mirrorlist riêng cho repo [universe] của Artix nếu đang cài Artix
+if [ -f /etc/artix-release ] || command -v basestrap >/dev/null; then
+    log_info "Khởi tạo mirrorlist riêng cho kho [universe]..."
+    mkdir -p /mnt/etc/pacman.d
+    cat << 'EOF' > /mnt/etc/pacman.d/mirrorlist-universe
+# Artix universe repository mirrorlist
+Server = https://universe.artixlinux.org/$arch
+Server = https://mirror1.artixlinux.org/universe/$arch
+Server = https://mirror.pascalpuffke.de/artix-universe/$arch
+Server = https://artix.drakon.rocks/universe/$arch
+EOF
+fi
+
+
 # Viết tệp tham số và cấu hình chroot
 cat << VAR_FILE > /mnt/root/install_vars.sh
 ENCRYPTION="${ENCRYPTION}"
@@ -377,17 +391,14 @@ if [ -f /etc/artix-release ]; then
     # Kích hoạt repo galaxy và universe trên Artix để cài xcape, direnv, picom, v.v.
     sed -i '/^#\[galaxy\]/,/^#Include/ { s/^#// }' /etc/pacman.conf
     
-    # Xóa hoàn toàn cấu hình [universe] cũ (commented hoặc uncommented) để tránh xung đột hoặc dùng sai mirrorlist
+    # Xóa cấu hình [universe] cũ (commented hoặc uncommented) để tránh xung đột hoặc dùng sai mirrorlist
     sed -i '/^#*\[universe\]/,/^[[:space:]]*$/d' /etc/pacman.conf
     
-    # Thêm cấu hình [universe] mới với các mirror chính thức hỗ trợ universe
+    # Thêm cấu hình [universe] mới trỏ tới mirrorlist-universe chuyên dụng
     tee -a /etc/pacman.conf > /dev/null << 'EOF'
 
 [universe]
-Server = https://universe.artixlinux.org/$arch
-Server = https://mirror1.artixlinux.org/universe/$arch
-Server = https://mirror.pascalpuffke.de/artix-universe/$arch
-Server = https://artix.drakon.rocks/universe/$arch
+Include = /etc/pacman.d/mirrorlist-universe
 EOF
     # Đồng bộ database sau khi kích hoạt repo mới
     pacman -Sy
