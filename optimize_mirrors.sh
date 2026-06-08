@@ -32,6 +32,48 @@ fi
 log_info "Sao lưu mirrorlist gốc..."
 cp "$MIRRORLIST" "${MIRRORLIST}.bak"
 
+#==============================================================================
+# THỬ DÙNG RATE-MIRRORS (NHANH & CHÍNH XÁC)
+#==============================================================================
+USE_RATE_MIRRORS=false
+RATE_MIRRORS_BIN="/tmp/rate-mirrors"
+
+log_info "Thử tải công cụ rate-mirrors từ GitHub..."
+if curl -sL --connect-timeout 4 -m 15 "https://github.com/westandskif/rate-mirrors/releases/latest/download/rate-mirrors-x86_64-unknown-linux-musl.tar.gz" | tar -xz -C /tmp 2>/dev/null; then
+    if [ -x "$RATE_MIRRORS_BIN" ]; then
+        USE_RATE_MIRRORS=true
+    fi
+fi
+
+if [ "$USE_RATE_MIRRORS" = true ]; then
+    log_info "Tải thành công rate-mirrors. Tiến hành đo và sắp xếp các mirror..."
+    if grep -qi "artix" /etc/os-release 2>/dev/null; then
+        # Artix Linux
+        if $RATE_MIRRORS_BIN --allow-root artix --save="$MIRRORLIST"; then
+            log_info "Đã tối ưu hóa mirrorlist của Artix bằng rate-mirrors thành công!"
+            rm -f "$RATE_MIRRORS_BIN"
+            
+            log_info "Đồng bộ lại database Pacman..."
+            pacman -Syy --noconfirm || true
+            exit 0
+        fi
+    else
+        # Arch Linux
+        if $RATE_MIRRORS_BIN --allow-root arch --save="$MIRRORLIST"; then
+            log_info "Đã tối ưu hóa mirrorlist của Arch bằng rate-mirrors thành công!"
+            rm -f "$RATE_MIRRORS_BIN"
+            
+            log_info "Đồng bộ lại database Pacman..."
+            pacman -Syy --noconfirm || true
+            exit 0
+        fi
+    fi
+    log_warn "rate-mirrors chạy lỗi, chuyển sang phương án dự phòng..."
+    rm -f "$RATE_MIRRORS_BIN"
+else
+    log_warn "Không thể tải rate-mirrors (có thể do chặn mạng GitHub), chuyển sang phương án dự phòng..."
+fi
+
 log_info "Bỏ comment các dòng Server trong mirrorlist..."
 sed -i 's/^#Server/Server/' "$MIRRORLIST"
 

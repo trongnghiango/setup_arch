@@ -278,6 +278,13 @@ cryptsetup close cryptlvm 2>/dev/null || true
 
 # Cài đặt công cụ phân vùng và LVM trên Live environment
 pgp_fix_before_pacstrap
+
+# Tự động tối ưu hóa mirrorlist để có danh sách server mới nhất và sống, tránh lỗi 404 tải gói
+if [ -f "$SCRIPT_DIR/optimize_mirrors.sh" ]; then
+    log_info "Tự động tối ưu hóa mirrorlist của môi trường Live..."
+    "$SCRIPT_DIR/optimize_mirrors.sh" || log_warn "Tối ưu hóa mirrorlist tự động thất bại, sử dụng mirrorlist mặc định."
+fi
+
 pacman -Sy --noconfirm --needed parted gptfdisk lvm2
 
 # Thực hiện phân vùng
@@ -392,11 +399,20 @@ EOF
 Include = /etc/pacman.d/mirrorlist-arch
 EOF
     fi
+    if ! grep -q "^\[multilib\]" /etc/pacman.conf; then
+        tee -a /etc/pacman.conf > /dev/null << 'EOF'
+
+[multilib]
+Include = /etc/pacman.d/mirrorlist-arch
+EOF
+    fi
     # Bật lại SigLevel kiểm tra chữ ký an toàn cho hệ thống
     sed -i 's/^SigLevel.*/SigLevel = Required DatabaseOptional/' /etc/pacman.conf
 else
     # Tạm thời vô hiệu hóa kiểm tra chữ ký PGP để nâng cấp keyring an toàn trên Arch Linux
     sed -i 's/^SigLevel.*/SigLevel = Never/' /etc/pacman.conf
+    # Kích hoạt repo multilib trên Arch Linux
+    sed -i '/^#\[multilib\]/,/^#Include/ { s/^#// }' /etc/pacman.conf
     pacman -Sy
     pacman -S --noconfirm archlinux-keyring
     pacman-key --populate archlinux
