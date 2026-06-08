@@ -19,6 +19,22 @@ log_error() {
 
 exec > >(tee -ai "${SCRIPT_LOG}") 2>&1
 
+write_static_fallback() {
+    log_info "Ghi danh sách mirror tĩnh đáng tin cậy..."
+    tee "$MIRRORLIST" > /dev/null << 'EOF'
+# Danh sach mirror tinh phan hoi nhanh va dong bo on dinh
+Server = https://mirrors.nguyenhoang.cloud/artix-linux/$repo/os/$arch
+Server = https://mirror.freedif.org/artix/$repo/os/$arch
+Server = https://mirror.funami.tech/artix/$repo/os/$arch
+Server = https://mirror.nju.edu.cn/artixlinux/$repo/os/$arch
+Server = https://mirrors.aliyun.com/artixlinux/$repo/os/$arch
+Server = https://mirrors.cloud.tencent.com/artixlinux/$repo/os/$arch
+Server = https://www.miraa.jp/artix-linux/$repo/os/$arch
+Server = https://qontinuum.space/mirror/artixlinux/$repo/os/$arch
+Server = https://artix.kurdy.org/$repo/os/$arch
+EOF
+}
+
 if [ "$EUID" -ne 0 ]; then
     log_error "Vui lòng chạy script này với quyền root (sudo)."
 fi
@@ -118,8 +134,8 @@ while IFS= read -r line; do
         http_code="${resp%%:*}"
         latency="${resp##*:}"
         
-        # Chấp nhận mã 200 (OK), hoặc 301/302/304 (Chuyển hướng hợp lệ)
-        if [[ ! "$http_code" =~ ^(200|301|302|304)$ ]]; then
+        # Chấp nhận mã 200 (OK), 206 (Partial Content cho range request), hoặc 301/302/304 (Chuyển hướng)
+        if [[ ! "$http_code" =~ ^(200|206|301|302|304)$ ]]; then
             latency="999"
         fi
         echo "$latency $line" >> "$RESULTS"
@@ -139,11 +155,17 @@ sort -n "$RESULTS" | head -20 > "$FASTEST"
 # Kiểm tra xem có server nào hoạt động không
 VALID_COUNT=$(awk '$1 != "999" {print}' "$FASTEST" | wc -l)
 if [ "$VALID_COUNT" -eq 0 ]; then
-    log_warn "Không có server nào hoạt động tốt (tất cả đều lỗi hoặc timeout)."
-    log_info "Khôi phục lại mirrorlist gốc..."
-    mv "${MIRRORLIST}.bak" "$MIRRORLIST"
+    log_warn "Không có server nào phản hồi tốt qua kiểm tra tự động."
+    write_static_fallback
     rm -f "$RESULTS" "$FASTEST"
-    exit 1
+    
+    log_info "Đồng bộ lại database Pacman..."
+    if pacman -Syy; then
+        log_info "Đồng bộ Pacman thành công bằng danh sách mirror tĩnh!"
+        exit 0
+    else
+        log_error "Đồng bộ Pacman thất bại ngay cả với danh sách mirror tĩnh. Vui lòng kiểm tra kết nối mạng."
+    fi
 fi
 
 log_info "Top server nhanh nhất (dưới 1 giây):"
