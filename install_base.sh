@@ -167,7 +167,7 @@ os_get_base_packages() {
     fi
     # Thêm sẵn các thư viện phát triển X11 và XCB phục vụ biên dịch các gói suckless
     local -a pkgs=(
-        base base-devel "$kernel" linux-firmware rsync xorg-xinit lvm2 grub efibootmgr sudo git curl neovim zsh dash libnewt openssh
+        base base-devel "$kernel" linux-firmware rsync xorg-xinit xf86-input-libinput lvm2 grub efibootmgr sudo git curl neovim zsh dash libnewt openssh
         libxcb xcb-util xcb-util-image xcb-util-keysyms xcb-util-wm
         libx11 libxft libxinerama libxrandr imlib2
     )
@@ -456,18 +456,56 @@ useradd -m -U -G wheel -s /bin/zsh "${USER_NAME}"
 echo "${USER_NAME}:${PASSWORD}" | chpasswd
 echo "root:${PASSWORD}" | chpasswd
 echo '%wheel ALL=(ALL:ALL) NOPASSWD: ALL' > /etc/sudoers.d/99_install_privileges
+echo "/usr/bin/loadkeys" >> /etc/sudoers.d/99_install_privileges
 
-# Kích hoạt NetworkManager và D-Bus tùy thuộc Init System
+# Cấu hình Xorg cho bàn phím & chuột (Tránh lỗi bàn phím không hoạt động sau khi update)
+mkdir -p /etc/X11/xorg.conf.d
+tee /etc/X11/xorg.conf.d/00-keyboard.conf > /dev/null <<'EOF'
+Section "InputClass"
+    Identifier      "system-keyboard"
+    MatchIsKeyboard "yes"
+    Option "XkbRules"   "evdev"
+    Option "XkbModel"   "pc105"
+    Option "XkbLayout"  "us"
+    Option "XkbVariant" ""
+    Option "XkbOptions" "caps:super,altwin:menu_win"
+EndSection
+EOF
+
+tee /etc/X11/xorg.conf.d/40-libinput.conf > /dev/null <<'EOF'
+Section "InputClass"
+    Identifier "libinput touchpad catchall"
+    MatchIsTouchpad "on"
+    MatchDevicePath "/dev/input/event*"
+    Driver "libinput"
+    Option "Tapping" "on"
+    Option "NaturalScrolling" "true"
+EndSection
+EOF
+
+# Kích hoạt NetworkManager, D-Bus và elogind tùy thuộc Init System
 case "$INIT_SYSTEM" in
-    openrc) rc-update add NetworkManager default; rc-update add dbus default ;;
-    runit)  ln -sf /etc/runit/sv/NetworkManager /etc/runit/runsvdir/default/
-            ln -sf /etc/runit/sv/dbus /etc/runit/runsvdir/default/ ;;
-    s6)     s6-service enable default NetworkManager
-            s6-service enable default dbus ;;
-    *)      systemctl enable NetworkManager ;;
+    openrc)
+        rc-update add NetworkManager default
+        rc-update add dbus default
+        rc-update add elogind boot
+        ;;
+    runit)
+        ln -sf /etc/runit/sv/NetworkManager /etc/runit/runsvdir/default/
+        ln -sf /etc/runit/sv/dbus /etc/runit/runsvdir/default/
+        ln -sf /etc/runit/sv/elogind /etc/runit/runsvdir/default/
+        ;;
+    s6)
+        s6-service enable default NetworkManager
+        s6-service enable default dbus
+        s6-service enable default elogind
+        ;;
+    *)
+        systemctl enable NetworkManager
+        ;;
 esac
 
-ln -sfT /bin/dash /bin/sh
+ln -sfT /bin/bash /bin/sh
 CHROOT_SCRIPT
 
 chmod 644 /mnt/root/install_vars.sh
