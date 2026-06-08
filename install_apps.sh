@@ -94,7 +94,9 @@ done < "${PROGS_FILE}"
 
 if [ ${#PACMAN_PKGS[@]} -gt 0 ]; then
     log_info "Cài đặt ${#PACMAN_PKGS[@]} gói Pacman trong 1 lệnh..."
-    pacman -S --noconfirm --needed "${PACMAN_PKGS[@]}" || log_warn "Một số gói Pacman cài đặt thất bại."
+    if ! pacman -S --noconfirm --needed "${PACMAN_PKGS[@]}"; then
+        log_error "Lỗi nghiêm trọng: Cài đặt các gói Pacman thất bại! Tiến trình dừng lại để bảo vệ hệ thống."
+    fi
 else
     log_info "Không có gói Pacman nào cần cài đặt."
 fi

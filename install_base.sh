@@ -364,7 +364,9 @@ echo "${HOSTNAME}" > /etc/hostname
 # Khởi tạo Pacman Keyring
 pacman-key --init
 if [ -f /etc/artix-release ]; then
-    pacman-key --populate artix
+    # Tạm thời vô hiệu hóa kiểm tra chữ ký PGP trong chroot để nâng cấp keyring an toàn
+    sed -i 's/^SigLevel.*/SigLevel = Never/' /etc/pacman.conf
+
     # Kích hoạt repo galaxy và universe trên Artix để cài xcape, direnv, picom, v.v.
     sed -i '/^#\[galaxy\]/,/^#Include/ { s/^#// }' /etc/pacman.conf
     if grep -q "^#\[universe\]" /etc/pacman.conf; then
@@ -378,8 +380,10 @@ EOF
     fi
     # Đồng bộ database sau khi kích hoạt repo mới
     pacman -Sy
-    # Kích hoạt repo extra của Arch Linux
-    pacman -S --noconfirm artix-archlinux-support
+    # Cài đặt/cập nhật keyring mới nhất của Artix và Arch
+    pacman -S --noconfirm artix-keyring artix-archlinux-support
+    # Nạp khóa chữ ký
+    pacman-key --populate artix
     pacman-key --populate archlinux
     if ! grep -q "^\[extra\]" /etc/pacman.conf; then
         tee -a /etc/pacman.conf > /dev/null << 'EOF'
@@ -388,8 +392,16 @@ EOF
 Include = /etc/pacman.d/mirrorlist-arch
 EOF
     fi
+    # Bật lại SigLevel kiểm tra chữ ký an toàn cho hệ thống
+    sed -i 's/^SigLevel.*/SigLevel = Required DatabaseOptional/' /etc/pacman.conf
 else
+    # Tạm thời vô hiệu hóa kiểm tra chữ ký PGP để nâng cấp keyring an toàn trên Arch Linux
+    sed -i 's/^SigLevel.*/SigLevel = Never/' /etc/pacman.conf
+    pacman -Sy
+    pacman -S --noconfirm archlinux-keyring
     pacman-key --populate archlinux
+    # Bật lại SigLevel
+    sed -i 's/^SigLevel.*/SigLevel = Required DatabaseOptional/' /etc/pacman.conf
 fi
 
 # Tải song song gói trong hệ thống mới
