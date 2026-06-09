@@ -114,12 +114,13 @@ sudo -u "${USER_NAME}" /bin/bash -c '
     SRC_DIR="$HOME/.local/src"
     PROGS_FILE="'${PROGS_FILE}'"
     SKIP_BUILD="'${SKIP_BUILD}'"
+    ERROR_LOG="'${ERROR_LOG}'"
 
     log_user() { echo -e "  \e[1;34m[USER]\e[0m $*"; }
-    log_err_u() { 
+    log_err_u() {
         local msg="$(date '+%H:%M:%S') [FAIL] $*"
         echo -e "  \e[1;31m[FAIL]\e[0m $*"
-        echo -e "${msg}" >> "'${ERROR_LOG}'"
+        echo -e "${msg}" >> "${ERROR_LOG}"
     }
 
     # Cài đặt thủ công từ AUR Snapshot (dự phòng)
