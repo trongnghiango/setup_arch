@@ -11,11 +11,36 @@ ERROR_LOG="/tmp/install_errors.log"
 touch "${ERROR_LOG}" && chmod 666 "${ERROR_LOG}" || true
 
 log_info() { echo -e "$(date '+%H:%M:%S') \e[1;32m[INFO]\e[0m  $*"; }
-log_error() { 
+log_error() {
     local msg="$(date '+%H:%M:%S') [ERROR] $*"
     echo -e "$(date '+%H:%M:%S') \e[1;31m[ERROR]\e[0m $*" >&2
     echo -e "${msg}" >> "${ERROR_LOG}"
-    exit 1; 
+    exit 1;
+}
+
+is_virtual() {
+    # 1. Dùng systemd-detect-virt nếu có (Arch)
+    if command -v systemd-detect-virt &>/dev/null; then
+        if systemd-detect-virt -q; then
+            return 0
+        fi
+    fi
+    # 2. Kiểm tra thông tin DMI (không cần quyền root)
+    if [ -f /sys/class/dmi/id/product_name ]; then
+        local prod
+        prod=$(cat /sys/class/dmi/id/product_name | tr '[:upper:]' '[:lower:]')
+        if [[ "$prod" =~ (qemu|kvm|virtualbox|vmware|virtual|bochs) ]]; then
+            return 0
+        fi
+    fi
+    if [ -f /sys/class/dmi/id/sys_vendor ]; then
+        local vendor
+        vendor=$(cat /sys/class/dmi/id/sys_vendor | tr '[:upper:]' '[:lower:]')
+        if [[ "$vendor" =~ (qemu|kvm|virtualbox|vmware) ]]; then
+            return 0
+        fi
+    fi
+    return 1
 }
 
 exec > >(tee -ai "${SCRIPT_LOG}") 2>&1
@@ -71,11 +96,17 @@ fi
 
 log_info "Thiết lập dotfiles cho '${USER_NAME}' bằng phương thức '${METHOD}'..."
 
+IS_VM="false"
+if is_virtual; then
+    IS_VM="true"
+fi
+
 sudo -u "${USER_NAME}" /bin/bash -c '
     set -euo pipefail
     METHOD="'${METHOD}'"
     REPO="'${REPO}'"
-    
+    IS_VM="'${IS_VM}'"
+
     log_user() { echo -e "  \e[1;32m[USER]\e[0m  $*"; }
 
     # Xác định thư mục lưu trữ dotfiles
@@ -95,6 +126,40 @@ sudo -u "${USER_NAME}" /bin/bash -c '
     else
         log_user "Thư mục dotfiles đã tồn tại. Pull update mới nhất..."
         cd "$DOTFILES_DIR" && git pull
+    fi
+
+    # Vá lỗi logic trong remapd để tránh treo bàn phím trên máy ảo/mới
+    local remapd_file="${DOTFILES_DIR}/scripts/.local/bin/remapd"
+    if [ -f "${remapd_file}" ]; then
+        log_user "Vá lỗi logic trong remapd để tránh treo bàn phím trên máy ảo..."
+        sed -i 's/sleep 2/exit 1/g' "${remapd_file}"
+        sed -i 's/udevadm failed, sleeping 2s to prevent CPU spam/udevadm monitor failed or was interrupted. Exiting remapd daemon to prevent keyboard lock./g' "${remapd_file}"
+    fi
+
+    # Phát hiện môi trường ảo và cấu hình lại picom
+    if [ "${IS_VM}" = "true" ]; then
+        log_user "Phát hiện môi trường ảo – sẽ vô hiệu hoá picom khởi chạy và chuyển cấu hình sang xrender."
+        # Comment picom trong xinitrc nguồn
+        local xinitrc_src="${DOTFILES_DIR}/x11/.config/x11/xinitrc"
+        if [ ! -f "$xinitrc_src" ]; then
+            # Đề phòng cấu hình xinitrc nằm ở scripts/.config/x11/xinitrc
+            xinitrc_src="${DOTFILES_DIR}/scripts/.config/x11/xinitrc"
+        fi
+
+        if [ -f "$xinitrc_src" ]; then
+            sed -i 's/\bpicom\b//g' "$xinitrc_src"
+            log_user "Đã loại bỏ picom khỏi danh sách autostart trong $xinitrc_src"
+        fi
+
+        # Cập nhật cấu hình picom.conf sang xrender
+        local picom_conf="${DOTFILES_DIR}/picom/.config/picom/picom.conf"
+        if [ -f "$picom_conf" ]; then
+            sed -i 's/backend = "glx";/backend = "xrender";/g' "$picom_conf"
+            sed -i 's/vsync = true;/vsync = false;/g' "$picom_conf"
+            log_user "Đã sửa picom sang backend xrender và tắt vsync trong $picom_conf"
+        fi
+    else
+        log_user "Không phát hiện môi trường ảo – giữ nguyên cấu hình picom mặc định."
     fi
 
     if [ "$METHOD" == "stow" ]; then
