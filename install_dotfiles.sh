@@ -155,7 +155,8 @@ if [ -f "${artix_xinitrc}" ]; then
         cat << 'EOF_ARTIX_VM' > "${artix_xinitrc}"
 #!/usr/bin/env sh
 # Môi trường ảo (VM) - Không khởi chạy Pipewire để tránh lỗi D-Bus/Audio Sink
-exit 0
+# Tránh dùng exit 0 vì file này được source (. xinitrc.artix), exit sẽ tắt luôn cả session X.
+return 0
 EOF_ARTIX_VM
     else
         log_info "Môi trường máy thật: Cấu hình Pipewire đầy đủ trong xinitrc.artix."
