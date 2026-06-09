@@ -11,6 +11,9 @@ aurhelper="yay"
 repobranch="main"
 export TERM=ansi
 
+# Thay link này bằng đường dẫn raw thực tế của bạn
+progsfile="https://raw.githubusercontent.com/trongnghiango/setup_arch/refs/heads/main/progs.csv"
+
 ### FUNCTIONS ###
 
 installpkg() {
@@ -134,6 +137,11 @@ installationloop() {
 	if [ -f "$local_csv" ]; then
 		cp "$local_csv" /tmp/progs.csv
 		whiptail --infobox "Found your custom progs.csv in dotfiles! Using it." 7 60
+	# 2. Nếu không có file cục bộ, tải từ link raw từ xa thông qua biến $progsfile
+	elif [ -n "$progsfile" ]; then
+		whiptail --infobox "Không tìm thấy file nội bộ. Đang tải progs.csv từ link raw trực tuyến..." 7 60
+		curl -Ls "$progsfile" | sed '/^#/d' >/tmp/progs.csv || 
+			error "Lỗi: Không thể tải file progs.csv từ đường dẫn raw trực tuyến."
 	else
 		error "Could not find progs.csv in /home/$name/.dotfiles/setup_arch/progs.csv. Please ensure your repository is correct."
 	fi
