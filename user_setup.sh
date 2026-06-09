@@ -135,7 +135,6 @@ ensure_xorg_input() {
 Section "InputClass"
     Identifier      "system-keyboard"
     MatchIsKeyboard "yes"
-    Option "XkbRules"   "evdev"
     Option "XkbModel"   "pc105"
     Option "XkbLayout"  "us"
     Option "XkbVariant" ""
@@ -165,10 +164,10 @@ setup_dotfiles() {
     command -v stow &>/dev/null || pacman -S --noconfirm stow
     if [[ -d $DOTFILES_DIR/.git ]]; then
         log_warn "Dotfiles đã có, pull cập nhật..."
-        (cd "$DOTFILES_DIR" && git pull --ff-only) || true
+        sudo -u "$USER_NAME" bash -c "cd '$DOTFILES_DIR' && git pull --ff-only" || true
     else
         rm -rf "$DOTFILES_DIR"
-        git clone --depth=1 "$DOTFILES_REPO" "$DOTFILES_DIR"
+        sudo -u "$USER_NAME" git clone --depth=1 "$DOTFILES_REPO" "$DOTFILES_DIR"
     fi
     sudo -u "$USER_NAME" bash -c "
         cd '$DOTFILES_DIR'
@@ -178,6 +177,9 @@ setup_dotfiles() {
             echo '  stow --restow --target=$HOME_DIR \$pkg_name'
             stow --restow --target='$HOME_DIR' \"\$pkg_name\"
         done
+        # Xóa các link nixos cũ nếu có để tránh ghi đè bản build mới
+        echo '  Dọn dẹp các liên kết NixOS cũ...'
+        rm -f '$HOME_DIR/.local/bin/dwm' '$HOME_DIR/.local/bin/st' '$HOME_DIR/.local/bin/dmenu' '$HOME_DIR/.local/bin/dwmblocks' '$HOME_DIR/.local/bin/stest'
     "
     # Cấp quyền thực thi script
     if [[ -d $HOME_DIR/.local/bin ]]; then

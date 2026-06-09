@@ -464,7 +464,6 @@ tee /etc/X11/xorg.conf.d/00-keyboard.conf > /dev/null <<'EOF'
 Section "InputClass"
     Identifier      "system-keyboard"
     MatchIsKeyboard "yes"
-    Option "XkbRules"   "evdev"
     Option "XkbModel"   "pc105"
     Option "XkbLayout"  "us"
     Option "XkbVariant" ""
