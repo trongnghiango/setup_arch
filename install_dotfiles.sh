@@ -177,26 +177,26 @@ for i in $(seq 1 20); do
     sleep 0.05
 done
 
-# 4. Khởi chạy Pipewire nếu chưa chạy
-if ! pgrep -x pipewire >/dev/null; then
-    pipewire >/dev/null 2>&1 &
+# 4. Luôn khởi động lại các daemon Pipewire trong session X để kế thừa D-Bus/DISPLAY đúng
+killall -9 pipewire wireplumber pipewire-pulse >/dev/null 2>&1 || true
 
-    # Đợi socket pipewire được tạo (tối đa 3 giây)
-    for i in $(seq 1 30); do
-        [ -S "$XDG_RUNTIME_DIR/pipewire-0" ] && break
-        sleep 0.1
-    done
+pipewire >/dev/null 2>&1 &
 
-    wireplumber >/dev/null 2>&1 &
+# Đợi socket pipewire được tạo (tối đa 3 giây)
+for i in $(seq 1 30); do
+    [ -S "$XDG_RUNTIME_DIR/pipewire-0" ] && break
+    sleep 0.1
+done
 
-    # Đợi wireplumber khởi động (tối đa 3 giây)
-    for i in $(seq 1 30); do
-        pgrep -x wireplumber >/dev/null && break
-        sleep 0.1
-    done
+wireplumber >/dev/null 2>&1 &
 
-    pipewire-pulse >/dev/null 2>&1 &
-fi
+# Đợi wireplumber khởi động (tối đa 3 giây)
+for i in $(seq 1 30); do
+    pgrep -x wireplumber >/dev/null && break
+    sleep 0.1
+done
+
+pipewire-pulse >/dev/null 2>&1 &
 EOF_ARTIX
 fi
 
