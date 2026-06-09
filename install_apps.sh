@@ -63,7 +63,8 @@ if [ -f /etc/resolv.conf ]; then
     cp /etc/resolv.conf /etc/resolv.conf.bak
     restore_dns() {
         if [ -f /etc/resolv.conf.bak ]; then
-            mv /etc/resolv.conf.bak /etc/resolv.conf
+            # Thay thế bằng cp để tránh lỗi "device or resource busy" khi mv
+            cp -f /etc/resolv.conf.bak /etc/resolv.conf && rm -f /etc/resolv.conf.bak
             log_info "Đã khôi phục lại cấu hình DNS ban đầu."
         fi
     }
