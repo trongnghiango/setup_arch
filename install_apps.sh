@@ -172,9 +172,8 @@ sudo -u "${USER_NAME}" /bin/bash -c '
                 cd "$progname" 2>/dev/null || continue
                 if [ -f "config.mk" ] || [ -f "Makefile" ]; then
                     # Build and install, logging details if it fails
-                    mkdir -p /var/log
-                    if ! (make && sudo make install) 2>>/var/log/setup_apps_errors.log; then
-                        log_err_u "Lỗi biên dịch $progname. Xem log tại /var/log/setup_apps_errors.log để biết chi tiết."
+                    if ! (make && sudo make install) 2>>"${ERROR_LOG}"; then
+                        log_err_u "Lỗi biên dịch $progname. Xem chi tiết lỗi ở file log: ${ERROR_LOG}"
                         exit 1
                     fi
                 fi
