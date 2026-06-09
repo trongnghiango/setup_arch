@@ -8,7 +8,7 @@
 # THAY ĐỔI ĐƯỜNG DẪN ĐẾN KHO DOTFILES CỦA BẠN TẠI ĐÂY
 dotfilesrepo="https://github.com/trongnghiango/dotfiles-stow.git" # Thay thế bằng link Git dotfiles thực tế của bạn
 aurhelper="yay"
-repobranch="master"
+repobranch="main"
 export TERM=ansi
 
 ### FUNCTIONS ###

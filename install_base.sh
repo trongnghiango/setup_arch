@@ -456,7 +456,6 @@ useradd -m -U -G wheel -s /bin/zsh "${USER_NAME}"
 echo "${USER_NAME}:${PASSWORD}" | chpasswd
 echo "root:${PASSWORD}" | chpasswd
 echo '%wheel ALL=(ALL:ALL) NOPASSWD: ALL' > /etc/sudoers.d/99_install_privileges
-echo "/usr/bin/loadkeys" >> /etc/sudoers.d/99_install_privileges
 
 # Cấu hình Xorg cho bàn phím & chuột (Tránh lỗi bàn phím không hoạt động sau khi update)
 mkdir -p /etc/X11/xorg.conf.d
