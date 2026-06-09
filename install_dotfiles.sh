@@ -136,22 +136,10 @@ sudo -u "${USER_NAME}" /bin/bash -c '
         sed -i 's/udevadm failed, sleeping 2s to prevent CPU spam/udevadm monitor failed or was interrupted. Exiting remapd daemon to prevent keyboard lock./g' "${remapd_file}"
     fi
 
-    # Phát hiện môi trường ảo và cấu hình lại picom
+    # Phát hiện môi trường ảo và cấu hình lại picom sang xrender
     if [ "${IS_VM}" = "true" ]; then
-        log_user "Phát hiện môi trường ảo – sẽ vô hiệu hoá picom khởi chạy và chuyển cấu hình sang xrender."
-        # Comment picom trong xinitrc nguồn
-        local xinitrc_src="${DOTFILES_DIR}/x11/.config/x11/xinitrc"
-        if [ ! -f "$xinitrc_src" ]; then
-            # Đề phòng cấu hình xinitrc nằm ở scripts/.config/x11/xinitrc
-            xinitrc_src="${DOTFILES_DIR}/scripts/.config/x11/xinitrc"
-        fi
-
-        if [ -f "$xinitrc_src" ]; then
-            sed -i 's/\bpicom\b//g' "$xinitrc_src"
-            log_user "Đã loại bỏ picom khỏi danh sách autostart trong $xinitrc_src"
-        fi
-
-        # Cập nhật cấu hình picom.conf sang xrender
+        log_user "Phát hiện môi trường ảo – sẽ cấu hình picom dùng backend xrender để tránh treo màn hình."
+        # Cập nhật cấu hình picom.conf sang xrender và tắt vsync
         local picom_conf="${DOTFILES_DIR}/picom/.config/picom/picom.conf"
         if [ -f "$picom_conf" ]; then
             sed -i 's/backend = "glx";/backend = "xrender";/g' "$picom_conf"
@@ -159,7 +147,7 @@ sudo -u "${USER_NAME}" /bin/bash -c '
             log_user "Đã sửa picom sang backend xrender và tắt vsync trong $picom_conf"
         fi
     else
-        log_user "Không phát hiện môi trường ảo – giữ nguyên cấu hình picom mặc định."
+        log_user "Không phát hiện môi trường ảo – giữ nguyên cấu hình picom mặc định (glx backend)."
     fi
 
     if [ "$METHOD" == "stow" ]; then
