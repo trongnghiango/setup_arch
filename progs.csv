@@ -48,6 +48,7 @@ G,https://gitlab.com/ntnghiatn/dwm.git,"[2] is the window manager (compiled from
 ,tmux,"[5] is the terminal multiplexer."
 ,trash-cli,"[5] moves files to trash cleanly."
 ,rsync,"[5] synchronizes files and folders."
+,direnv,"[5] is the environment switcher loaded in env.zsh."
 ,pipewire-alsa,"[6] provides ALSA compatibility layer for Pipewire."
 ,pipewire-pulse,"[6] gives pipewire compatibility with PulseAudio programs."
 ,wireplumber,"[6] is the audio session manager for Pipewire."

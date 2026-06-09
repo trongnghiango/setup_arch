@@ -456,7 +456,6 @@ useradd -m -U -G wheel -s /bin/zsh "${USER_NAME}"
 echo "${USER_NAME}:${PASSWORD}" | chpasswd
 echo "root:${PASSWORD}" | chpasswd
 echo '%wheel ALL=(ALL:ALL) NOPASSWD: ALL' > /etc/sudoers.d/99_install_privileges
-echo "/usr/bin/loadkeys" >> /etc/sudoers.d/99_install_privileges
 
 # Cấu hình Xorg cho bàn phím & chuột (Tránh lỗi bàn phím không hoạt động sau khi update)
 mkdir -p /etc/X11/xorg.conf.d
@@ -464,7 +463,6 @@ tee /etc/X11/xorg.conf.d/00-keyboard.conf > /dev/null <<'EOF'
 Section "InputClass"
     Identifier      "system-keyboard"
     MatchIsKeyboard "yes"
-    Option "XkbRules"   "evdev"
     Option "XkbModel"   "pc105"
     Option "XkbLayout"  "us"
     Option "XkbVariant" ""
