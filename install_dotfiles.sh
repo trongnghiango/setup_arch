@@ -200,6 +200,14 @@ pipewire-pulse >/dev/null 2>&1 &
 EOF_ARTIX
 fi
 
+# Xóa các file binary NixOS cũ được compile sẵn trong dotfiles nguồn (gây lỗi interpreter trên Artix)
+log_info "Dọn dẹp các file binary NixOS compile sẵn trong dotfiles..."
+rm -f "${DOTFILES_DIR}/scripts/.local/bin/dwm" \
+      "${DOTFILES_DIR}/scripts/.local/bin/st" \
+      "${DOTFILES_DIR}/scripts/.local/bin/dmenu" \
+      "${DOTFILES_DIR}/scripts/.local/bin/dwmblocks" \
+      "${DOTFILES_DIR}/scripts/.local/bin/stest"
+
 # Đảm bảo tất cả các file đã vá vẫn thuộc sở hữu của user
 chown -R "${USER_NAME}:${USER_NAME}" "${DOTFILES_DIR}"
 
