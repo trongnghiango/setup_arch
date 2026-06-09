@@ -36,7 +36,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 exec > >(tee -ai "${SCRIPT_LOG}") 2>&1
 
 #==============================================================================
-# KHỞI TẠO BIẾN CẤU HÌNH (Đã điền sẵn các URL mẫu để tránh lỗi)
+# KHỞI TẠO BIẾN CẤU HÌNH
 #==============================================================================
 ENCRYPTION=false
 USER_NAME="ka"
@@ -45,12 +45,10 @@ HOSTNAME="archlinux"
 FILESYSTEM="ext4"
 DOTFILES_METHOD="stow"
 
-# CHÚ Ý: BẠN HÃY THAY CÁC URL NÀY BẰNG REPO CỦA BẠN
 DOTFILES_RSYNC_REPO="https://github.com/trongnghiango/voidrice.git"
 DOTFILES_STOW_REPO="https://github.com/trongnghiango/dotfiles-stow.git"
 DOTFILES_REPO=""
 PROGS_LIST_URL="https://raw.githubusercontent.com/trongnghiango/setup_arch/refs/heads/main/progs.csv"
-
 
 TIME_ZONE="Asia/Ho_Chi_Minh"
 LOCALE="en_US.UTF-8"
@@ -94,7 +92,6 @@ disk_prepare() {
     log_info "Tạo bảng phân vùng GPT mới..."
     sgdisk -og -n 1:2048:+512M -t 1:ef00 -n 2:0:0 -t 2:8e00 "$device" || log_error "sgdisk thất bại!"
     
-    # Logic xác định tên phân vùng chính xác (hỗ trợ NVMe, MMC, SD)
     if [[ "$device" =~ [0-9]$ ]]; then
         PART_BOOT="${device}p1"
         PART_LVM="${device}p2"
@@ -161,13 +158,12 @@ bootloader_get_kernel_cmdline() {
 os_get_base_packages() {
     local fs="$1" method="$2"
     local kernel="linux-lts"
-    # Artix Linux mặc định không có linux-lts trong repo system/world
     if [ -f /etc/artix-release ] || command -v basestrap >/dev/null 2>&1; then
         kernel="linux"
     fi
-    # Thêm sẵn các thư viện phát triển X11 và XCB phục vụ biên dịch các gói suckless
+    # ĐÃ SỬA: Đã thêm xorg-server vào danh sách cài đặt nền tảng
     local -a pkgs=(
-        base base-devel "$kernel" linux-firmware rsync xorg-xinit xf86-input-libinput lvm2 grub efibootmgr sudo git curl neovim zsh dash libnewt openssh
+        base base-devel "$kernel" linux-firmware rsync xorg-server xorg-xinit xf86-input-libinput lvm2 grub efibootmgr sudo git curl neovim zsh dash libnewt openssh
         libxcb xcb-util xcb-util-image xcb-util-keysyms xcb-util-wm
         libx11 libxft libxinerama libxrandr imlib2
     )
@@ -175,7 +171,6 @@ os_get_base_packages() {
     [ "$fs" = "btrfs" ] && pkgs+=(btrfs-progs)
     [ "$method" = "stow" ] && pkgs+=(stow)
     
-    # Thêm service packages tương ứng với Init System
     case "$INIT_SYSTEM" in
         openrc) pkgs+=(openrc elogind-openrc networkmanager-openrc lvm2-openrc openssh-openrc) ;;
         runit)  pkgs+=(runit elogind-runit networkmanager-runit lvm2-runit) ;;
@@ -189,7 +184,6 @@ pgp_fix_before_pacstrap() {
     log_warn "Tạm thời vô hiệu hóa kiểm tra chữ ký PGP của môi trường LIVE để cài đặt ổn định..."
     cp /etc/pacman.conf /etc/pacman.conf.bak
     sed -i 's/^#*SigLevel.*/SigLevel = Never/' /etc/pacman.conf
-    # Bật tải song song gói trên môi trường Live
     if grep -q "^#ParallelDownloads" /etc/pacman.conf; then
         sed -i 's/^#ParallelDownloads.*/ParallelDownloads = 8/' /etc/pacman.conf
     elif ! grep -q "^ParallelDownloads" /etc/pacman.conf; then
@@ -251,9 +245,7 @@ echo "  - Dotfiles repo:  ${DOTFILES_REPO}"
 echo "  - Init system:    ${INIT_SYSTEM}"
 echo "-------------------------------------------------"
 
-# TÌM XUỐNG ĐOẠN XỬ LÝ NHẬP MẬT KHẨU (Sửa lại để an toàn hơn)
 if [ -z "${PASSWORD}" ]; then
-    # Yêu cầu nhập 2 lần để tránh gõ sai
     while true; do
         read -sp "Nhập mật khẩu cho user '${USER_NAME}', 'root' và LUKS: " PASS1; echo
         read -sp "Nhập lại mật khẩu để xác nhận: " PASS2; echo
@@ -269,17 +261,14 @@ fi
 read -rp "CẢNH BÁO: Dữ liệu trên /dev/${DISK} sẽ bị XÓA SẠCH. Tiếp tục? [y/N]: " confirm
 if [[ ! "$confirm" =~ ^[Yy]$ ]]; then log_info "Đã hủy."; exit 0; fi
 
-# Dọn dẹp mount, swap, LVM, LUKS cũ để chạy lại an toàn
 log_info "Dọn dẹp mount, swap, LVM và LUKS cũ..."
 if mountpoint -q /mnt; then umount -R /mnt 2>/dev/null || true; fi
 swapoff -a 2>/dev/null || true
 vgchange -an vg0 2>/dev/null || true
 cryptsetup close cryptlvm 2>/dev/null || true
 
-# Cài đặt công cụ phân vùng và LVM trên Live environment
 pgp_fix_before_pacstrap
 
-# Tự động tối ưu hóa mirrorlist để có danh sách server mới nhất và sống, tránh lỗi 404 tải gói
 if [ -f "$SCRIPT_DIR/optimize_mirrors.sh" ]; then
     log_info "Tự động tối ưu hóa mirrorlist của môi trường Live..."
     "$SCRIPT_DIR/optimize_mirrors.sh" || log_warn "Tối ưu hóa mirrorlist tự động thất bại, sử dụng mirrorlist mặc định."
@@ -287,7 +276,6 @@ fi
 
 pacman -Sy --noconfirm --needed parted gptfdisk lvm2
 
-# Thực hiện phân vùng
 DEVICE="/dev/${DISK}"
 disk_prepare "$DEVICE"
 disk_encrypt_setup "$PART_LVM" "$PASSWORD"
@@ -312,24 +300,21 @@ mount /dev/vg0/root /mnt
 mkdir -p /mnt/boot
 mount "${PART_BOOT}" /mnt/boot
 
-# Cập nhật cơ sở dữ liệu pacman (mirrorlist đã được tối ưu riêng)
 log_info "Sử dụng mirrorlist hiện tại..."
 pacman -Syy --noconfirm
 
 PACKAGES_TO_INSTALL=( $(os_get_base_packages "$FILESYSTEM" "$DOTFILES_METHOD") )
 log_info "Bắt đầu cài đặt các gói CLI cơ bản vào /mnt..."
 
-# Xác định trình cài đặt là basestrap (Artix) hoặc pacstrap (Arch)
 INSTALLER=""
 if command -v basestrap &>/dev/null; then
     INSTALLER="basestrap"
 elif command -v pacstrap &>/dev/null; then
     INSTALLER="pacstrap"
 else
-    log_error "Không tìm thấy lệnh cài đặt (basestrap/pacstrap). Hãy cài gói arch-install-scripts hoặc tương đương."
+    log_error "Không tìm thấy lệnh cài đặt (basestrap/pacstrap)."
 fi
 
-# Chạy lệnh cài đặt
 $INSTALLER /mnt "${PACKAGES_TO_INSTALL[@]}"
 
 pgp_restore_after_pacstrap
@@ -345,12 +330,10 @@ PART_LVM_UUID=$(disk_get_pv_uuid "$PART_LVM")
 HOOKS_LINE=$(initramfs_get_hooks "$FILESYSTEM")
 KERNEL_CMDLINE=$(bootloader_get_kernel_cmdline "$PART_LVM_UUID")
 
-# Tạo cấu hình mirrorlist riêng cho repo [universe] của Artix nếu đang cài Artix
 if [ -f /etc/artix-release ] || command -v basestrap >/dev/null; then
     log_info "Khởi tạo mirrorlist riêng cho kho [universe]..."
     mkdir -p /mnt/etc/pacman.d
     cat << 'EOF' > /mnt/etc/pacman.d/mirrorlist-universe
-# Artix universe repository mirrorlist
 Server = https://universe.artixlinux.org/$arch
 Server = https://mirror1.artixlinux.org/universe/$arch
 Server = https://mirror.pascalpuffke.de/artix-universe/$arch
@@ -358,8 +341,6 @@ Server = https://artix.drakon.rocks/universe/$arch
 EOF
 fi
 
-
-# Viết tệp tham số và cấu hình chroot
 cat << VAR_FILE > /mnt/root/install_vars.sh
 ENCRYPTION="${ENCRYPTION}"
 INIT_SYSTEM="${INIT_SYSTEM}"
@@ -374,7 +355,6 @@ cat << 'CHROOT_SCRIPT' > /mnt/root/chroot_config.sh
 set -euo pipefail
 source /root/install_vars.sh
 
-# Đồng bộ thời gian & Locale
 ln -sf "/usr/share/zoneinfo/${TIME_ZONE}" /etc/localtime
 hwclock --systohc
 sed -i "s/^#${LOCALE}/${LOCALE}/" /etc/locale.gen
@@ -382,29 +362,19 @@ locale-gen
 echo "LANG=${LOCALE}" > /etc/locale.conf
 echo "${HOSTNAME}" > /etc/hostname
 
-# Khởi tạo Pacman Keyring
 pacman-key --init
 if [ -f /etc/artix-release ]; then
-    # Tạm thời vô hiệu hóa kiểm tra chữ ký PGP trong chroot để nâng cấp keyring an toàn
     sed -i 's/^SigLevel.*/SigLevel = Never/' /etc/pacman.conf
-
-    # Kích hoạt repo galaxy và universe trên Artix để cài xcape, direnv, picom, v.v.
     sed -i '/^#\[galaxy\]/,/^#Include/ { s/^#// }' /etc/pacman.conf
-    
-    # Xóa cấu hình [universe] cũ (commented hoặc uncommented) để tránh xung đột hoặc dùng sai mirrorlist
     sed -i '/^#*\[universe\]/,/^[[:space:]]*$/d' /etc/pacman.conf
     
-    # Thêm cấu hình [universe] mới trỏ tới mirrorlist-universe chuyên dụng
     tee -a /etc/pacman.conf > /dev/null << 'EOF'
 
 [universe]
 Include = /etc/pacman.d/mirrorlist-universe
 EOF
-    # Đồng bộ database sau khi kích hoạt repo mới
     pacman -Sy
-    # Cài đặt/cập nhật keyring mới nhất của Artix và Arch
     pacman -S --noconfirm artix-keyring artix-archlinux-support
-    # Nạp khóa chữ ký
     pacman-key --populate artix
     pacman-key --populate archlinux
     if ! grep -q "^\[extra\]" /etc/pacman.conf; then
@@ -421,21 +391,16 @@ EOF
 Include = /etc/pacman.d/mirrorlist-arch
 EOF
     fi
-    # Bật lại SigLevel kiểm tra chữ ký an toàn cho hệ thống
     sed -i 's/^SigLevel.*/SigLevel = Required DatabaseOptional/' /etc/pacman.conf
 else
-    # Tạm thời vô hiệu hóa kiểm tra chữ ký PGP để nâng cấp keyring an toàn trên Arch Linux
     sed -i 's/^SigLevel.*/SigLevel = Never/' /etc/pacman.conf
-    # Kích hoạt repo multilib trên Arch Linux
     sed -i '/^#\[multilib\]/,/^#Include/ { s/^#// }' /etc/pacman.conf
     pacman -Sy
     pacman -S --noconfirm archlinux-keyring
     pacman-key --populate archlinux
-    # Bật lại SigLevel
     sed -i 's/^SigLevel.*/SigLevel = Required DatabaseOptional/' /etc/pacman.conf
 fi
 
-# Tải song song gói trong hệ thống mới
 if grep -q "^#ParallelDownloads" /etc/pacman.conf; then
     sed -i 's/^#ParallelDownloads.*/ParallelDownloads = 8/' /etc/pacman.conf
 elif ! grep -q "^ParallelDownloads" /etc/pacman.conf; then
@@ -444,20 +409,21 @@ fi
 
 pacman -Syu --noconfirm
 
-# Cấu hình initramfs & bootloader
-sed -i "s/^HOOKS=.*/HOOKS=(${HOOKS_LINE})/" /etc/mkinitcpio.conf
+# ĐÃ SỬA: Tăng tính bền bỉ cho lệnh sed cấu hình GRUB & initramfs
+sed -i "s|^HOOKS=.*|HOOKS=(${HOOKS_LINE})|g" /etc/mkinitcpio.conf
 mkinitcpio -P
-sed -i "s|GRUB_CMDLINE_LINUX=\"\"|GRUB_CMDLINE_LINUX=\"${KERNEL_CMDLINE}\"|" /etc/default/grub
+sed -i "s|^GRUB_CMDLINE_LINUX=.*|GRUB_CMDLINE_LINUX=\"${KERNEL_CMDLINE}\"|g" /etc/default/grub
 grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB --recheck
 grub-mkconfig -o /boot/grub/grub.cfg
 
-# Cấu hình tài khoản người dùng
 useradd -m -U -G wheel -s /bin/zsh "${USER_NAME}"
 echo "${USER_NAME}:${PASSWORD}" | chpasswd
 echo "root:${PASSWORD}" | chpasswd
+
+# CẤU HÌNH TẠM THỜI: Quyền Sudoers không mật khẩu phục vụ cài đặt Post-install
 echo '%wheel ALL=(ALL:ALL) NOPASSWD: ALL' > /etc/sudoers.d/99_install_privileges
 
-# Cấu hình Xorg cho bàn phím & chuột (Tránh lỗi bàn phím không hoạt động sau khi update)
+# Cấu hình Xorg bàn phím & chuột
 mkdir -p /etc/X11/xorg.conf.d
 tee /etc/X11/xorg.conf.d/00-keyboard.conf > /dev/null <<'EOF'
 Section "InputClass"
@@ -481,7 +447,6 @@ Section "InputClass"
 EndSection
 EOF
 
-# Kích hoạt NetworkManager, D-Bus và elogind tùy thuộc Init System
 case "$INIT_SYSTEM" in
     openrc)
         rc-update add NetworkManager default
@@ -518,20 +483,18 @@ fi
 
 rm /mnt/root/chroot_config.sh
 
-# Lưu lại các file script cài đặt sang hệ thống mới để chạy offline/post-install dễ dàng
+# Lưu lại các file script cài đặt để post-install
 mkdir -p "/mnt/home/${USER_NAME}/setup_arch"
 cp -r "${SCRIPT_DIR}"/* "/mnt/home/${USER_NAME}/setup_arch/"
 
-# Dùng chroot để đổi quyền vì user chỉ tồn tại bên trong /mnt
 if command -v artix-chroot &>/dev/null; then
     artix-chroot /mnt chown -R "${USER_NAME}:${USER_NAME}" "/home/${USER_NAME}/setup_arch/"
 else
     arch-chroot /mnt chown -R "${USER_NAME}:${USER_NAME}" "/home/${USER_NAME}/setup_arch/"
 fi
 
-# Sao chép log setup_base vào phân vùng mới
 cp "${SCRIPT_LOG}" /mnt/var/log/setup_base.log 2>/dev/null || true
 
 log_info "GIAI ĐOẠN 1 HOÀN TẤT!"
 log_info "Hệ điều hành CLI đã được cài đặt thành công."
-log_info "Anh có thể reboot vào hệ thống mới và chạy script setup để cài tiếp giao diện."
+log_info "Bạn có thể reboot vào hệ thống mới và chạy script setup để cài tiếp giao diện."

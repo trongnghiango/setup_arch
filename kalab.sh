@@ -25,6 +25,18 @@ error() {
 	exit 1
 }
 
+handle_error() {
+	# $1: Tên gói bị lỗi
+	# $2: Loại nguồn cài đặt (Official Repo, AUR, Git, Pip)
+	whiptail --title "PHÁT HIỆN LỖI CÀI ĐẶT!" \
+		--yes-button "Bỏ qua & Tiếp tục" \
+		--no-button "Dừng & Thoát Script" \
+		--yesno "Không thể cài đặt thành công gói \`$1\` từ nguồn [$2].\\n\\nBạn có muốn tiếp tục cài đặt các gói còn lại không?" 11 75 || {
+		clear
+		error "Quá trình cài đặt đã bị hủy bởi người dùng tại gói: $1 ($2)"
+	}
+}
+
 welcomemsg() {
 	whiptail --title "Welcome!" \
 		--msgbox "Welcome to your customized Arch Bootstrapping Script!\\n\\nThis script will install your custom terminal-centric system on Arch Linux." 10 60
@@ -75,9 +87,39 @@ adduserandpass() {
 	unset pass1 pass2
 }
 
+
 refreshkeys() {
-	whiptail --infobox "Refreshing Arch Keyring..." 7 40
-	pacman --noconfirm -S archlinux-keyring >/dev/null 2>&1
+	whiptail --infobox "Khởi tạo và nạp hệ thống khóa Arch Linux (Keyring)..." 7 60
+	# Khởi tạo cơ bản hệ thống khóa
+	pacman-key --init >/dev/null 2>&1
+	pacman-key --populate archlinux >/dev/null 2>&1
+
+	whiptail --infobox "Đang kiểm tra và cập nhật gói archlinux-keyring..." 7 60
+	# Thử cập nhật keyring theo cách an toàn tiêu chuẩn
+	if ! pacman -Sy --noconfirm archlinux-keyring >/dev/null 2>&1; then
+		whiptail --infobox "Lỗi chữ ký số (có thể do ISO cũ). Đang tiến hành tự động khắc phục..." 8 65
+		
+		# Sao lưu file cấu hình pacman.conf gốc
+		cp /etc/pacman.conf /etc/pacman.conf.bak
+
+		# Tạm thời tắt kiểm tra chữ ký để cài đặt gói khóa mới nhất
+		# Xử lý các biến thể khoảng trắng thường gặp trong pacman.conf
+		sed -i 's/SigLevel    = Required DatabaseOptional/SigLevel = Never/g' /etc/pacman.conf
+		sed -i 's/SigLevel = Required DatabaseOptional/SigLevel = Never/g' /etc/pacman.conf
+
+		# Tiến hành đồng bộ và cài đặt keyring mới
+		pacman -Sy --noconfirm archlinux-keyring >/dev/null 2>&1
+
+		# Khôi phục ngay lập tức cấu hình bảo mật gốc để đảm bảo an toàn cho hệ thống
+		mv /etc/pacman.conf.bak /etc/pacman.conf
+
+		# Khởi tạo lại hệ thống khóa mới vừa được cập nhật
+		pacman-key --init >/dev/null 2>&1
+		pacman-key --populate archlinux >/dev/null 2>&1
+
+		# Đồng bộ lại cơ sở dữ liệu với chế độ bảo mật đã được kích hoạt lại
+		pacman -Syy >/dev/null 2>&1
+	fi
 }
 
 manualinstall() {
@@ -95,26 +137,43 @@ manualinstall() {
 		makepkg --noconfirm -si >/dev/null 2>&1 || return 1
 }
 
-maininstall() {
-	whiptail --title "Installation" --infobox "Installing \`$1\` ($n of $total). $1 $2" 9 70
-	installpkg "$1"
+
+manualinstall() {
+	pacman -Qq "$1" && return 0
+	whiptail --infobox "Installing \"$1\" manually." 7 50
+	sudo -u "$name" mkdir -p "$repodir/$1"
+	sudo -u "$name" git -C "$repodir" clone --depth 1 --single-branch \
+		--no-tags -q "https://aur.archlinux.org/$1.git" "$repodir/$1" ||
+		{
+			cd "$repodir/$1" || { handle_error "$1" "AUR Helper Directory Access"; return 1; }
+			sudo -u "$name" git pull --force origin master || { handle_error "$1" "AUR Helper Pull"; return 1; }
+		}
+	cd "$repodir/$1" || exit 1
+	sudo -u "$name" \
+		makepkg --noconfirm -si >/dev/null 2>&1 || { handle_error "$1" "AUR Helper Build"; return 1; }
 }
 
 gitmakeinstall() {
 	progname="${1##*/}"
 	progname="${progname%.git}"
 	dir="$repodir/$progname"
-	whiptail --title "Installation" \
-		--infobox "Installing \`$progname\` ($n of $total) via \`git\` and \`make\`." 8 70
-	sudo -u "$name" git -C "$repodir" clone --depth 1 --single-branch \
-		--no-tags -q "$1" "$dir" ||
-		{
-			cd "$dir" || return 1
-			sudo -u "$name" git pull --force origin master
-		}
-	cd "$dir" || exit 1
-	make >/dev/null 2>&1
-	make install >/dev/null 2>&1
+	whiptail --title "KALAB Installation" \
+		--infobox "Installing \`$progname\` ($n of $total) via \`git\` and \`make\`. $(basename "$1") $2" 8 70
+	
+	# Thử clone, nếu thư mục đã tồn tại thì thử pull
+	if ! sudo -u "$name" git -C "$repodir" clone --depth 1 --single-branch --no-tags -q "$1" "$dir" >/dev/null 2>&1; then
+		if [ -d "$dir" ]; then
+			cd "$dir" || { handle_error "$progname" "Git Directory Access"; return 1; }
+			sudo -u "$name" git pull --force origin master >/dev/null 2>&1 || { handle_error "$progname" "Git Pull"; return 1; }
+		else
+			handle_error "$progname" "Git Clone"
+			return 1
+		fi
+	fi
+	
+	# Tiến hành biên dịch và cài đặt
+	cd "$dir" || return 1
+	(make >/dev/null 2>&1 && make install >/dev/null 2>&1) || handle_error "$progname" "Make Build/Install"
 	cd /tmp || return 1
 }
 
@@ -125,11 +184,19 @@ aurinstall() {
 	sudo -u "$name" $aurhelper -S --noconfirm "$1" >/dev/null 2>&1
 }
 
+aurinstall() {
+	whiptail --title "KALAB Installation" \
+		--infobox "Installing \`$1\` ($n of $total) from the AUR. $1 $2" 9 70
+	echo "$aurinstalled" | grep -q "^$1$" && return 0
+	sudo -u "$name" $aurhelper -S --noconfirm "$1" >/dev/null 2>&1 || handle_error "$1" "AUR"
+}
+
+
 pipinstall() {
-	whiptail --title "Installation" \
-		--infobox "Installing Python package \`$1\` ($n of $total)." 9 70
-	[ -x "$(command -v "pip")" ] || installpkg python-pip >/dev/null 2>&1
-	yes | pip install "$1"
+	whiptail --title "KALAB Installation" \
+		--infobox "Installing the Python package \`$1\` ($n of $total). $1 $2" 9 70
+	[ -x "$(command -v "pip")" ] || installpkg python-pip >/dev/null 2>&1 || { handle_error "python-pip" "Pip Bootstrap"; return 1; }
+	yes | pip install "$1" >/dev/null 2>&1 || handle_error "$1" "Pip"
 }
 
 installationloop() {
