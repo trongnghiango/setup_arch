@@ -19,7 +19,7 @@ SCRIPT_TIME="$(date +%Y%m%d_%H%M%S)"
 SCRIPT_LOG="/tmp/setup_base_${SCRIPT_TIME}.log"
 ERROR_LOG="/tmp/install_errors.log"
 log_info() { echo -e "$(date '+%H:%M:%S') \e[1;32m[INFO]\e[0m  $*"; }
-log_warn() { 
+log_warn() {
     local msg="$(date '+%H:%M:%S') [WARN] $*"
     echo -e "$(date '+%H:%M:%S') \e[1;33m[WARN]\e[0m  $*"
     echo -e "${msg}" >> "${ERROR_LOG}"
@@ -31,6 +31,37 @@ log_error() {
     exit 1
 }
 step() { echo -e "\n$(date '+%H:%M:%S') \e[1;34m>>> $*\e[0m"; }
+
+# ---- Cơ chế dọn dẹp tự động khi script kết thúc hoặc bị lỗi ----
+cleanup() {
+    log_warn "Thực hiện dọn dẹp tài nguyên..."
+    # Unmount nếu đã mount
+    mountpoint -q /mnt/boot && umount -R /mnt/boot 2>/dev/null || true
+    mountpoint -q /mnt && umount -R /mnt 2>/dev/null || true
+    # Đóng LVM và LUKS nếu tồn tại
+    vgchange -an vg0 2>/dev/null || true
+    cryptsetup close cryptlvm 2>/dev/null || true
+    swapoff -a 2>/dev/null || true
+}
+# Đăng ký trap để gọi cleanup khi script thoát (EXIT), hoặc nhận tín hiệu INT/TERM
+trap cleanup EXIT INT TERM
+
+# ---- Hàm hỗ trợ cập nhật cấu hình an toàn ----
+# Thay thế hoặc thêm một khóa cấu hình trong file nếu chưa tồn tại.
+#   $1: file, $2: key (không có dấu =), $3: giá trị mới (không có dấu =)
+safe_update_key() {
+    local file="$1"
+    local key="$2"
+    local newval="$3"
+    # Kiểm tra dòng key hiện có (không comment)
+    if grep -E "^[[:space:]]*${key}=" "$file" >/dev/null; then
+        # Thay thế giá trị hiện tại
+        sed -i "s|^[[:space:]]*${key}=.*|${key}=${newval}|g" "$file"
+    else
+        # Thêm vào cuối file
+        echo "${key}=${newval}" >> "$file"
+    fi
+}
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 exec > >(tee -ai "${SCRIPT_LOG}") 2>&1
@@ -75,84 +106,107 @@ usage() {
 # PHÁT HIỆN INIT SYSTEM & CHUẨN BỊ ĐĨA
 #==============================================================================
 os_detect_init() {
-    if command -v rc-update &>/dev/null; then echo "openrc";
-    elif [ -d /etc/runit ]; then echo "runit";
-    elif command -v s6-service &>/dev/null; then echo "s6";
-    else echo "systemd"; fi
+    if command -v rc-update &>/dev/null; then
+        echo "openrc"
+        return 0
+    fi
+    if [ -d /etc/runit ]; then
+        echo "runit"
+        return 0
+    fi
+    if command -v s6-service &>/dev/null; then
+        echo "s6"
+        return 0
+    fi
+    echo "systemd"
+}
+
+# Lấy danh sách phân vùng mới tạo (dựa trên lsblk để chính xác với mọi loại đĩa)
+disk_get_partition_names() {
+    local device="$1"
+    shift
+    # Đợi kernel nhận diện phân vùng (có thể mất vài giây)
+    udevadm settle 2>/dev/null || true
+    local tries=0
+    while [ "$tries" -lt 10 ]; do
+        PART_BOOT=$(lsblk -lnpo NAME "${device}" 2>/dev/null | sed -n '2p' || echo "")
+        PART_LVM=$(lsblk -lnpo NAME "${device}" 2>/dev/null | sed -n '3p' || echo "")
+        [ -n "$PART_BOOT" ] && [ -n "$PART_LVM" ] && break
+        sleep 1
+        tries=$((tries + 1))
+    done
+    if [ -z "$PART_BOOT" ] || [ -z "$PART_LVM" ]; then
+        log_error "Không thể phát hiện các phân vùng sau khi tạo trên ${device}."
+    fi
 }
 
 disk_prepare() {
     local device="$1"
     log_info "Tắt swap, LVM, và đóng LUKS cũ nếu có..."
-    swapoff -a || true
-    vgchange -an vg0 || true
-    cryptsetup close cryptlvm || true
+    swapoff -a 2>/dev/null || true
+    vgchange -an vg0 2>/dev/null || true
+    cryptsetup close cryptlvm 2>/dev/null || true
     log_info "Đang dọn dẹp signature cũ trên $device..."
     wipefs -af "$device" || true
     log_info "Tạo bảng phân vùng GPT mới..."
     sgdisk -og -n 1:2048:+512M -t 1:ef00 -n 2:0:0 -t 2:8e00 "$device" || log_error "sgdisk thất bại!"
-    
-    if [[ "$device" =~ [0-9]$ ]]; then
-        PART_BOOT="${device}p1"
-        PART_LVM="${device}p2"
-    else
-        PART_BOOT="${device}1"
-        PART_LVM="${device}2"
-    fi
-    
+
+    # Lấy tên phân vùng tự động
+    disk_get_partition_names "$device"
+
+    log_info "Phân vùng Boot: ${PART_BOOT}, Phân vùng LVM: ${PART_LVM}"
     log_info "Đồng bộ kernel..."
-    udevadm settle || true
-    blockdev --rereadpt "$device" || true
-    sleep 2
-    partprobe "$device" || udevadm settle || true
+    udevadm settle 2>/dev/null || true
+    blockdev --rereadpt "$device" 2>/dev/null || true
+    partprobe "$device" 2>/dev/null || udevadm settle 2>/dev/null || true
 }
 
 disk_encrypt_setup() {
     local lvm_part="$1" password="$2"
-    if [ "$ENCRYPTION" = true ]; then
-        log_info "Thiết lập mã hóa LUKS trên ${lvm_part}..."
-        echo -n "$password" | cryptsetup luksFormat --type luks2 "$lvm_part" -
-        log_info "Mở khóa phân vùng đã mã hóa..."
-        echo -n "$password" | cryptsetup open "$lvm_part" cryptlvm -
-        PV_DEVICE="/dev/mapper/cryptlvm"
-    else
+    if [ "$ENCRYPTION" != true ]; then
         PV_DEVICE="$lvm_part"
+        return 0
     fi
+    log_info "Thiết lập mã hóa LUKS trên ${lvm_part}..."
+    echo -n "$password" | cryptsetup luksFormat --type luks2 "$lvm_part" -
+    log_info "Mở khóa phân vùng đã mã hóa..."
+    echo -n "$password" | cryptsetup open "$lvm_part" cryptlvm -
+    PV_DEVICE="/dev/mapper/cryptlvm"
 }
 
 disk_get_pv_uuid() {
     local lvm_part="$1"
-    if [ "$ENCRYPTION" = true ]; then
-        blkid -s UUID -o value "$lvm_part"
-    else
+    if [ "$ENCRYPTION" != true ]; then
         echo ""
+        return 0
     fi
+    blkid -s UUID -o value "$lvm_part"
 }
 
 initramfs_get_hooks() {
     local fs="$1"
-    if [ "$ENCRYPTION" = true ]; then
-        if [ "$fs" = "btrfs" ]; then
-            echo "base udev autodetect keyboard keymap modconf block btrfs encrypt lvm2 filesystems fsck"
-        else
-            echo "base udev autodetect keyboard keymap modconf block encrypt lvm2 filesystems fsck"
-        fi
-    else
-        if [ "$fs" = "btrfs" ]; then
-            echo "base udev autodetect keyboard keymap modconf block btrfs lvm2 filesystems fsck"
-        else
-            echo "base udev autodetect keyboard keymap modconf block lvm2 filesystems fsck"
-        fi
+    if [ "$ENCRYPTION" = true ] && [ "$fs" = "btrfs" ]; then
+        echo "base udev autodetect keyboard keymap modconf block btrfs encrypt lvm2 filesystems fsck"
+        return 0
     fi
+    if [ "$ENCRYPTION" = true ]; then
+        echo "base udev autodetect keyboard keymap modconf block encrypt lvm2 filesystems fsck"
+        return 0
+    fi
+    if [ "$fs" = "btrfs" ]; then
+        echo "base udev autodetect keyboard keymap modconf block btrfs lvm2 filesystems fsck"
+        return 0
+    fi
+    echo "base udev autodetect keyboard keymap modconf block lvm2 filesystems fsck"
 }
 
 bootloader_get_kernel_cmdline() {
     local lvm_uuid="$1"
     if [ "$ENCRYPTION" = true ] && [ -n "$lvm_uuid" ]; then
         echo "cryptdevice=UUID=${lvm_uuid}:cryptlvm root=/dev/vg0/root"
-    else
-        echo "root=/dev/vg0/root"
+        return 0
     fi
+    echo "root=/dev/vg0/root"
 }
 
 os_get_base_packages() {
@@ -258,10 +312,21 @@ if [ -z "${PASSWORD}" ]; then
     done
 fi
 
-read -rp "CẢNH BÁO: Dữ liệu trên /dev/${DISK} sẽ bị XÓA SẠCH. Tiếp tục? [y/N]: " confirm
+# ---- Kiểm tra thiết bị và xác nhận trước khi xóa ----
+DEVICE="/dev/${DISK}"
+if [ ! -b "${DEVICE}" ]; then
+    log_error "Thiết bị ${DEVICE} không tồn tại hoặc không phải là thiết bị khối (block device)."
+fi
+# Kiểm tra xem có phân vùng nào của thiết bị đang được mount (trừ /mnt và /mnt/boot)
+if findmnt -rn -o TARGET --source "${DEVICE}"* | grep -vE "^/mnt(/boot)?$" >/dev/null 2>&1; then
+    log_error "Thiết bị ${DEVICE} hoặc một số phân vùng của nó đang được sử dụng. Vui lòng unmount trước."
+fi
+
+read -rp "CẢNH BÁO: Dữ liệu trên ${DEVICE} sẽ bị XÓA SẠCH. Tiếp tục? [y/N]: " confirm
 if [[ ! "$confirm" =~ ^[Yy]$ ]]; then log_info "Đã hủy."; exit 0; fi
 
 log_info "Dọn dẹp mount, swap, LVM và LUKS cũ..."
+if mountpoint -q /mnt/boot; then umount -R /mnt/boot 2>/dev/null || true; fi
 if mountpoint -q /mnt; then umount -R /mnt 2>/dev/null || true; fi
 swapoff -a 2>/dev/null || true
 vgchange -an vg0 2>/dev/null || true
@@ -276,7 +341,6 @@ fi
 
 pacman -Sy --noconfirm --needed parted gptfdisk lvm2
 
-DEVICE="/dev/${DISK}"
 disk_prepare "$DEVICE"
 disk_encrypt_setup "$PART_LVM" "$PASSWORD"
 
@@ -355,6 +419,18 @@ cat << 'CHROOT_SCRIPT' > /mnt/root/chroot_config.sh
 set -euo pipefail
 source /root/install_vars.sh
 
+# Hàm hỗ trợ cập nhật cấu hình an toàn trong chroot
+safe_update_key() {
+    local file="$1"
+    local key="$2"
+    local newval="$3"
+    if grep -E "^[[:space:]]*${key}=" "$file" >/dev/null; then
+        sed -i "s|^[[:space:]]*${key}=.*|${key}=${newval}|g" "$file"
+    else
+        echo "${key}=${newval}" >> "$file"
+    fi
+}
+
 ln -sf "/usr/share/zoneinfo/${TIME_ZONE}" /etc/localtime
 hwclock --systohc
 sed -i "s/^#${LOCALE}/${LOCALE}/" /etc/locale.gen
@@ -409,10 +485,10 @@ fi
 
 pacman -Syu --noconfirm
 
-# ĐÃ SỬA: Tăng tính bền bỉ cho lệnh sed cấu hình GRUB & initramfs
-sed -i "s|^HOOKS=.*|HOOKS=(${HOOKS_LINE})|g" /etc/mkinitcpio.conf
+# Cấu hình mkinitcpio và GRUB một cách an toàn
+safe_update_key "/etc/mkinitcpio.conf" "HOOKS" "(${HOOKS_LINE})"
 mkinitcpio -P
-sed -i "s|^GRUB_CMDLINE_LINUX=.*|GRUB_CMDLINE_LINUX=\"${KERNEL_CMDLINE}\"|g" /etc/default/grub
+safe_update_key "/etc/default/grub" "GRUB_CMDLINE_LINUX" "\"${KERNEL_CMDLINE}\""
 grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB --recheck
 grub-mkconfig -o /boot/grub/grub.cfg
 
@@ -494,6 +570,9 @@ else
 fi
 
 cp "${SCRIPT_LOG}" /mnt/var/log/setup_base.log 2>/dev/null || true
+
+# Tắt bẫy (trap) dọn dẹp vì cài đặt đã thành công, cần giữ lại mount để giai đoạn tiếp theo chạy
+trap - EXIT INT TERM
 
 log_info "GIAI ĐOẠN 1 HOÀN TẤT!"
 log_info "Hệ điều hành CLI đã được cài đặt thành công."
