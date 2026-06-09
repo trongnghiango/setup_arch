@@ -129,8 +129,8 @@ sudo -u "${USER_NAME}" env METHOD="${METHOD}" REPO="${REPO}" IS_VM="${IS_VM}" /b
     remapd_file="${DOTFILES_DIR}/scripts/.local/bin/remapd"
     if [ -f "${remapd_file}" ]; then
         log_user "Vá lỗi logic trong remapd để tránh treo bàn phím trên máy ảo..."
-        sed -i 's/sleep 2/exit 1/g' "${remapd_file}"
-        sed -i 's/udevadm failed, sleeping 2s to prevent CPU spam/udevadm monitor failed or was interrupted. Exiting remapd daemon to prevent keyboard lock./g' "${remapd_file}"
+        sed -i "s/sleep 2/exit 1/g" "${remapd_file}"
+        sed -i "s/udevadm failed, sleeping 2s to prevent CPU spam/udevadm monitor failed or was interrupted. Exiting remapd daemon to prevent keyboard lock./g" "${remapd_file}"
     fi
 
     # Phát hiện môi trường ảo và cấu hình lại picom sang xrender
@@ -139,8 +139,8 @@ sudo -u "${USER_NAME}" env METHOD="${METHOD}" REPO="${REPO}" IS_VM="${IS_VM}" /b
         # Cập nhật cấu hình picom.conf sang xrender và tắt vsync
         picom_conf="${DOTFILES_DIR}/picom/.config/picom/picom.conf"
         if [ -f "$picom_conf" ]; then
-            sed -i 's/backend = "glx";/backend = "xrender";/g' "$picom_conf"
-            sed -i 's/vsync = true;/vsync = false;/g' "$picom_conf"
+            sed -i "s/backend = \"glx\";/backend = \"xrender\";/g" "$picom_conf"
+            sed -i "s/vsync = true;/vsync = false;/g" "$picom_conf"
             log_user "Đã sửa picom sang backend xrender và tắt vsync trong $picom_conf"
         fi
     else
