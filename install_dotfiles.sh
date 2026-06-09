@@ -96,56 +96,119 @@ fi
 
 log_info "Thiết lập dotfiles cho '${USER_NAME}' bằng phương thức '${METHOD}'..."
 
-IS_VM="false"
-if is_virtual; then
-    IS_VM="true"
+# Xác định thư mục lưu trữ dotfiles (bằng đường dẫn tuyệt đối từ root hệ thống)
+# Lấy thư mục home của user một cách an toàn
+USER_HOME=$(eval echo "~${USER_NAME}")
+if [ "$METHOD" == "stow" ]; then
+    DOTFILES_DIR="${USER_HOME}/.dotfiles"
+else
+    DOTFILES_DIR="${USER_HOME}/.local/src/dotfiles"
 fi
 
-sudo -u "${USER_NAME}" env METHOD="${METHOD}" REPO="${REPO}" IS_VM="${IS_VM}" /bin/bash -c '
+#------------------------------------------------------------------------------
+# 1. CLONE / PULL DOTFILES (Bằng tài khoản User để bảo toàn phân quyền git)
+#------------------------------------------------------------------------------
+log_info "Cloning dotfiles từ ${REPO}..."
+if [ -d "$DOTFILES_DIR" ] && [ ! -d "$DOTFILES_DIR/.git" ]; then
+    log_info "Thư mục dotfiles không hợp lệ (clone dang dở). Xóa và clone lại..."
+    rm -rf "$DOTFILES_DIR"
+fi
+
+if [ ! -d "$DOTFILES_DIR" ]; then
+    sudo -u "${USER_NAME}" git clone --depth=1 --recurse-submodules "${REPO}" "${DOTFILES_DIR}"
+else
+    log_info "Thư mục dotfiles đã tồn tại. Pull update mới nhất..."
+    sudo -u "${USER_NAME}" bash -c "cd '${DOTFILES_DIR}' && git pull"
+fi
+
+#------------------------------------------------------------------------------
+# 2. VÁ LỖI CẤU HÌNH NGUỒN (Chạy bằng Root – cực kỳ an toàn, không lo lỗi nháy đơn)
+#------------------------------------------------------------------------------
+
+# Vá lỗi logic trong remapd để tránh treo bàn phím trên máy ảo/mới
+remapd_file="${DOTFILES_DIR}/scripts/.local/bin/remapd"
+if [ -f "${remapd_file}" ]; then
+    log_info "Vá lỗi logic trong remapd để tránh treo bàn phím trên máy ảo..."
+    sed -i 's/sleep 2/exit 1/g' "${remapd_file}"
+    sed -i 's/udevadm failed, sleeping 2s to prevent CPU spam/udevadm monitor failed or was interrupted. Exiting remapd daemon to prevent keyboard lock./g' "${remapd_file}"
+fi
+
+# Phát hiện môi trường ảo và cấu hình lại picom sang xrender
+if is_virtual; then
+    log_info "Phát hiện môi trường ảo – sẽ cấu hình picom dùng backend xrender để tránh treo màn hình."
+    picom_conf="${DOTFILES_DIR}/picom/.config/picom/picom.conf"
+    if [ -f "$picom_conf" ]; then
+        sed -i 's/backend = "glx";/backend = "xrender";/g' "$picom_conf"
+        sed -i 's/vsync = true;/vsync = false;/g' "$picom_conf"
+        log_info "Đã sửa picom sang backend xrender và tắt vsync trong $picom_conf"
+    fi
+else
+    log_info "Không phát hiện môi trường ảo – giữ nguyên cấu hình picom mặc định (glx backend)."
+fi
+
+# Vá lỗi khởi chạy Pipewire trên Artix Linux (thiếu XDG_RUNTIME_DIR và D-Bus)
+artix_xinitrc="${DOTFILES_DIR}/x11/.config/x11/xinitrc.artix"
+if [ -f "${artix_xinitrc}" ]; then
+    log_info "Cập nhật cơ chế khởi động Pipewire trong xinitrc.artix để đảm bảo âm thanh trên Artix..."
+    cat << 'EOF_ARTIX' > "${artix_xinitrc}"
+#!/usr/bin/env sh
+
+# ==============================================================================
+# Khởi chạy âm thanh Pipewire trên Artix (không dùng systemd user services)
+# ==============================================================================
+
+# 1. Tạo XDG_RUNTIME_DIR (elogind tạo /run/user/<uid> khi login vào tty)
+if [ -z "$XDG_RUNTIME_DIR" ]; then
+    export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+    mkdir -p "$XDG_RUNTIME_DIR"
+    chmod 700 "$XDG_RUNTIME_DIR"
+fi
+
+# 2. Khởi chạy D-Bus session nếu chưa có
+if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
+    if command -v dbus-launch >/dev/null 2>&1; then
+        eval "$(dbus-launch --sh-syntax --exit-with-session)"
+    fi
+fi
+
+# 3. Đảm bảo D-Bus sẵn sàng trước khi khởi chạy Pipewire
+for i in $(seq 1 20); do
+    [ -n "$DBUS_SESSION_BUS_ADDRESS" ] && break
+    sleep 0.05
+done
+
+# 4. Khởi chạy Pipewire nếu chưa chạy
+if ! pgrep -x pipewire >/dev/null; then
+    pipewire >/dev/null 2>&1 &
+
+    # Đợi socket pipewire được tạo (tối đa 3 giây)
+    for i in $(seq 1 30); do
+        [ -S "$XDG_RUNTIME_DIR/pipewire-0" ] && break
+        sleep 0.1
+    done
+
+    wireplumber >/dev/null 2>&1 &
+
+    # Đợi wireplumber khởi động (tối đa 3 giây)
+    for i in $(seq 1 30); do
+        pgrep -x wireplumber >/dev/null && break
+        sleep 0.1
+    done
+
+    pipewire-pulse >/dev/null 2>&1 &
+fi
+EOF_ARTIX
+fi
+
+# Đảm bảo tất cả các file đã vá vẫn thuộc sở hữu của user
+chown -R "${USER_NAME}:${USER_NAME}" "${DOTFILES_DIR}"
+
+#------------------------------------------------------------------------------
+# 3. ÁP DỤNG DOTFILES (Bằng tài khoản User)
+#------------------------------------------------------------------------------
+sudo -u "${USER_NAME}" env METHOD="${METHOD}" DOTFILES_DIR="${DOTFILES_DIR}" /bin/bash -c '
     set -euo pipefail
-
     log_user() { echo -e "  \e[1;32m[USER]\e[0m  $*"; }
-
-    # Xác định thư mục lưu trữ dotfiles
-    if [ "$METHOD" == "stow" ]; then
-        DOTFILES_DIR="$HOME/.dotfiles"
-    else
-        DOTFILES_DIR="$HOME/.local/src/dotfiles"
-    fi
-
-    log_user "Cloning dotfiles từ ${REPO}..."
-    if [ -d "$DOTFILES_DIR" ] && [ ! -d "$DOTFILES_DIR/.git" ]; then
-        log_user "Thư mục dotfiles không hợp lệ (clone dang dở). Xóa và clone lại..."
-        rm -rf "$DOTFILES_DIR"
-    fi
-    if [ ! -d "$DOTFILES_DIR" ]; then
-        git clone --depth=1 --recurse-submodules "${REPO}" "${DOTFILES_DIR}"
-    else
-        log_user "Thư mục dotfiles đã tồn tại. Pull update mới nhất..."
-        cd "$DOTFILES_DIR" && git pull
-    fi
-
-    # Vá lỗi logic trong remapd để tránh treo bàn phím trên máy ảo/mới
-    remapd_file="${DOTFILES_DIR}/scripts/.local/bin/remapd"
-    if [ -f "${remapd_file}" ]; then
-        log_user "Vá lỗi logic trong remapd để tránh treo bàn phím trên máy ảo..."
-        sed -i "s/sleep 2/exit 1/g" "${remapd_file}"
-        sed -i "s/udevadm failed, sleeping 2s to prevent CPU spam/udevadm monitor failed or was interrupted. Exiting remapd daemon to prevent keyboard lock./g" "${remapd_file}"
-    fi
-
-    # Phát hiện môi trường ảo và cấu hình lại picom sang xrender
-    if [ "${IS_VM}" = "true" ]; then
-        log_user "Phát hiện môi trường ảo – sẽ cấu hình picom dùng backend xrender để tránh treo màn hình."
-        # Cập nhật cấu hình picom.conf sang xrender và tắt vsync
-        picom_conf="${DOTFILES_DIR}/picom/.config/picom/picom.conf"
-        if [ -f "$picom_conf" ]; then
-            sed -i "s/backend = \"glx\";/backend = \"xrender\";/g" "$picom_conf"
-            sed -i "s/vsync = true;/vsync = false;/g" "$picom_conf"
-            log_user "Đã sửa picom sang backend xrender và tắt vsync trong $picom_conf"
-        fi
-    else
-        log_user "Không phát hiện môi trường ảo – giữ nguyên cấu hình picom mặc định (glx backend)."
-    fi
 
     if [ "$METHOD" == "stow" ]; then
         log_user "Chạy stow để tạo các liên kết tượng trưng (symlinks)..."
