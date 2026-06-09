@@ -149,8 +149,17 @@ fi
 # Vá lỗi khởi chạy Pipewire trên Artix Linux (thiếu XDG_RUNTIME_DIR và D-Bus)
 artix_xinitrc="${DOTFILES_DIR}/x11/.config/x11/xinitrc.artix"
 if [ -f "${artix_xinitrc}" ]; then
-    log_info "Cập nhật cơ chế khởi động Pipewire trong xinitrc.artix để đảm bảo âm thanh trên Artix..."
-    cat << 'EOF_ARTIX' > "${artix_xinitrc}"
+    log_info "Cập nhật cơ chế khởi động Pipewire trong xinitrc.artix..."
+    if is_virtual; then
+        log_info "Môi trường ảo: Bỏ qua khởi chạy Pipewire tự động trong xinitrc.artix."
+        cat << 'EOF_ARTIX_VM' > "${artix_xinitrc}"
+#!/usr/bin/env sh
+# Môi trường ảo (VM) - Không khởi chạy Pipewire để tránh lỗi D-Bus/Audio Sink
+exit 0
+EOF_ARTIX_VM
+    else
+        log_info "Môi trường máy thật: Cấu hình Pipewire đầy đủ trong xinitrc.artix."
+        cat << 'EOF_ARTIX' > "${artix_xinitrc}"
 #!/usr/bin/env sh
 
 # ==============================================================================
@@ -198,6 +207,21 @@ done
 
 pipewire-pulse >/dev/null 2>&1 &
 EOF_ARTIX
+    fi
+fi
+
+# Vá lỗi script hiển thị volume ka-volume trong dotfiles
+ka_volume_file="${DOTFILES_DIR}/scripts/.local/bin/ka-volume"
+if [ -f "${ka_volume_file}" ]; then
+    if is_virtual; then
+        log_info "Môi trường ảo: Vá ka-volume để hiển thị trạng thái máy ảo."
+        # Thay thế logic hiển thị để in trực tiếp "🔇 VM" trên máy ảo
+        cat << 'EOF_VOL_VM' > "${ka_volume_file}"
+#!/usr/bin/env sh
+# Hiển thị trạng thái máy ảo
+echo "^C3^🔇 ^C15^VM"
+EOF_VOL_VM
+    fi
 fi
 
 # Xóa các file binary NixOS cũ được compile sẵn trong dotfiles nguồn (gây lỗi interpreter trên Artix)
