@@ -58,7 +58,25 @@ done
 #==============================================================================
 # 1. CHUẨN BỊ DNS & PACMAN
 #==============================================================================
-echo "nameserver 1.1.1.1" > /etc/resolv.conf
+# Sao lưu DNS cũ nếu có để khôi phục khi thoát script
+if [ -f /etc/resolv.conf ]; then
+    cp /etc/resolv.conf /etc/resolv.conf.bak
+    restore_dns() {
+        if [ -f /etc/resolv.conf.bak ]; then
+            mv /etc/resolv.conf.bak /etc/resolv.conf
+            log_info "Đã khôi phục lại cấu hình DNS ban đầu."
+        fi
+    }
+    # Đăng ký trap để tự động khôi phục DNS khi thoát thành công hoặc lỗi
+    trap restore_dns EXIT INT TERM
+fi
+
+# Chỉ cấu hình DNS dự phòng 1.1.1.1/8.8.8.8 nếu kiểm tra phân giải DNS hiện tại bị lỗi
+# Sử dụng timeout 2 giây để tránh chờ đợi lâu
+if ! curl -sI --connect-timeout 2 https://archlinux.org &>/dev/null; then
+    log_info "Không thể phân giải tên miền, thiết lập DNS tạm thời..."
+    echo -e "nameserver 1.1.1.1\nnameserver 8.8.8.8" > /etc/resolv.conf
+fi
 
 # Bật ParallelDownloads trong hệ thống mới
 if grep -q "^#ParallelDownloads" /etc/pacman.conf; then
@@ -109,12 +127,9 @@ log_info "Chuẩn bị môi trường build cho user '${USER_NAME}'..."
 mkdir -p "/home/${USER_NAME}/.local/src"
 chown -R "${USER_NAME}:${USER_NAME}" "/home/${USER_NAME}/.local"
 
-sudo -u "${USER_NAME}" /bin/bash -c '
+sudo -u "${USER_NAME}" env PROGS_FILE="${PROGS_FILE}" SKIP_BUILD="${SKIP_BUILD}" ERROR_LOG="${ERROR_LOG}" /bin/bash -c '
     set -euo pipefail
     SRC_DIR="$HOME/.local/src"
-    PROGS_FILE="'${PROGS_FILE}'"
-    SKIP_BUILD="'${SKIP_BUILD}'"
-    ERROR_LOG="'${ERROR_LOG}'"
 
     log_user() { echo -e "  \e[1;34m[USER]\e[0m $*"; }
     log_err_u() {

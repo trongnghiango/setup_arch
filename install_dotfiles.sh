@@ -101,11 +101,8 @@ if is_virtual; then
     IS_VM="true"
 fi
 
-sudo -u "${USER_NAME}" /bin/bash -c '
+sudo -u "${USER_NAME}" env METHOD="${METHOD}" REPO="${REPO}" IS_VM="${IS_VM}" /bin/bash -c '
     set -euo pipefail
-    METHOD="'${METHOD}'"
-    REPO="'${REPO}'"
-    IS_VM="'${IS_VM}'"
 
     log_user() { echo -e "  \e[1;32m[USER]\e[0m  $*"; }
 

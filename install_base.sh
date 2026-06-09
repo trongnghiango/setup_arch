@@ -544,7 +544,6 @@ case "$INIT_SYSTEM" in
         ;;
 esac
 
-ln -sfT /bin/bash /bin/sh
 CHROOT_SCRIPT
 
 chmod 644 /mnt/root/install_vars.sh
